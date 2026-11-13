@@ -21,12 +21,20 @@ def _library_paths():
 
 
 def _paths_ready(paths, create=False):
-    from xbmcvfs import exists, mkdirs
+    from xbmcvfs import exists, mkdirs, translatePath
+    if create and not exists(ADDONDATA):
+        mkdirs(ADDONDATA)
     ready = True
     for path in paths.values():
-        if create and not exists(path):
+        # Some Kodi platforms do not report an empty special:// directory through exists()
+        # until its translated filesystem path has been touched. Check both forms so setup is
+        # deterministic on Android as well as desktop Kodi.
+        translated = translatePath(path)
+        path_exists = exists(path) or exists(translated)
+        if create and not path_exists:
             mkdirs(path)
-        ready = exists(path) and ready
+            path_exists = exists(path) or exists(translated)
+        ready = path_exists and ready
     return ready
 
 
