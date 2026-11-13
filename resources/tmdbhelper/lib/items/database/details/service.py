@@ -1,0 +1,313 @@
+import traceback
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from secrets import token_hex
+from socketserver import BaseRequestHandler, ThreadingMixIn, TCPServer
+from threading import Event, Thread
+from time import monotonic
+from xbmc import Monitor
+from xbmcaddon import Addon
+from tmdbhelper.lib.addon.logger import kodi_log
+from tmdbhelper.lib.addon.plugin import get_setting, get_version
+from tmdbhelper.lib.files.sqlite_mutex import SQLiteMutex
+from tmdbhelper.lib.items.database.details.coordinator import DetailsCoordinator
+from tmdbhelper.lib.items.database.details.enrichment import KodiDetailsEnrichment, KodiLibraryCache
+from tmdbhelper.lib.items.database.details.merge import ConfiguredItemMerger
+from tmdbhelper.lib.items.database.details.protocol import (
+    DetailsLookupError, DetailsServiceError, DetailsServiceUnavailable,
+    MAX_REQUEST_ITEMS, PROTOCOL_VERSION, RESPONSE_TIMEOUT, ServiceLocation,
+    encode_message, receive_message,
+)
+from tmdbhelper.lib.items.database.details.ratings.worker import DetailsRatingsWorker
+from tmdbhelper.lib.items.database.details.refresh import DetailsSyncRefresher
+from tmdbhelper.lib.items.database.details.request import DetailsRequest
+from tmdbhelper.lib.items.database.details.settings import DetailsSettings
+from tmdbhelper.lib.sync.prepare import SyncPreparation
+
+
+class DetailsMonitor(Monitor):
+    def __init__(self):
+        super().__init__()
+        self.settings_changed = Event()
+
+    def onSettingsChanged(self):
+        self.settings_changed.set()
+
+
+class DetailsRequestHandler(BaseRequestHandler):
+    def handle(self):
+        self.request.settimeout(0.25)
+        try:
+            message = receive_message(self.request, self.server.monitor, timeout=10)
+            response = self.get_response(message)
+        except DetailsServiceUnavailable as exc:
+            response = {'error': str(exc), 'unavailable': True}
+        except (DetailsServiceError, TypeError, ValueError, KeyError) as exc:
+            response = {'error': str(exc)}
+        except OSError:
+            return
+        self.request.settimeout(5)
+        try:
+            self.send_response(response)
+        except OSError:
+            return  # The requesting widget may have been closed.
+
+    def send_response(self, response):
+        self.request.sendall(self.get_encoded_response(response))
+
+    @staticmethod
+    def get_encoded_response(response):
+        try:
+            return encode_message(response)
+        except DetailsServiceError as exc:
+            # Report oversize responses as a request error, not a dropped connection,
+            # so that the client does not mistake it for a failed service.
+            return encode_message({'error': str(exc)})
+
+    def get_response(self, message):
+        if message['version'] != PROTOCOL_VERSION or message['token'] != self.server.token:
+            raise DetailsServiceUnavailable('Item detail service protocol/token mismatch')
+        if message.get('ratings_request') is not None:
+            return self.get_ratings_response(message['ratings_request'])
+        if message.get('prepare') is not None:
+            return self.get_prepare_response(message['prepare'])
+        if message.get('invalidate'):
+            return self.get_invalidate_response()
+        entries = message['items']
+        if entries is None:
+            if not self.server.coordinator.is_alive() or self.server.coordinator.stopping:
+                raise DetailsServiceUnavailable('Item detail coordinator stopped')
+            return {'items': []}
+        if not isinstance(entries, list) or len(entries) > MAX_REQUEST_ITEMS:
+            raise DetailsServiceError('Invalid item detail batch')
+        return self.get_batch_response(entries, message)
+
+    def get_batch_response(self, entries, message):
+        ratings = self.start_ratings(entries)
+        results = [
+            self.get_entry_result(entry, result)
+            for entry, result in zip(entries, self.get_detail_results(entries))]
+        if message.get('kodi_details'):
+            results = self.get_kodi_results(entries, results)
+        results = self.get_ratings_results(entries, results, ratings)
+        return {
+            'items': [item for item, error in results],
+            'errors': {f'{x}': error for x, (item, error) in enumerate(results) if error},
+        }
+
+    def get_prepare_response(self, prepare):
+        """Start refreshing synced play data while the list is retrieved, without waiting.
+        Lists send this only when they permit synced data."""
+        if SyncPreparation.is_enabled():
+            self.server.sync_refresher.refresh(SyncPreparation.get_hint_item_types(**prepare))
+        return {'items': []}
+
+    def get_invalidate_response(self):
+        """Clear assembled metadata after item details were changed outside the service."""
+        self.server.coordinator.invalidate()
+        return {'items': []}
+
+    def get_ratings_response(self, ratings_request):
+        """Ratings that a monitor prewarmed with its details request, as their providers finish."""
+        reply = self.server.ratings.get_monitor_ratings(
+            DetailsRequest(**ratings_request['request']),
+            received=ratings_request['received'],
+            awards=ratings_request['awards'],
+            timeout=RESPONSE_TIMEOUT,
+        )
+        return {'items': [reply]}
+
+    def start_ratings(self, entries):
+        """Start ratings before item details: monitors prewarm them to ask for separately,
+        and lists receive them merged into their items."""
+        return [self.start_entry_ratings(entry) for entry in entries]
+
+    def start_entry_ratings(self, entry):
+        if entry.get('ratings') is None or entry['request'] is None:
+            return
+        start = {
+            'prewarm': self.server.ratings.prewarm,
+            'merge': self.server.ratings.start_list_ratings,
+        }
+        return start[entry['ratings']](DetailsRequest(**entry['request']))
+
+    def get_ratings_results(self, entries, results, jobs):
+        deadline = monotonic() + RESPONSE_TIMEOUT
+        return [
+            self.get_entry_ratings_result(entry, result, job, deadline)
+            for entry, result, job in zip(entries, results, jobs)
+        ]
+
+    def get_entry_ratings_result(self, entry, result, job, deadline):
+        """Add list ratings after the details merge, so that they replace list values as before.
+        An item whose details failed still receives ratings with its own list data."""
+        if job is None:
+            return result
+        item, error = result
+        item = item or entry['item']
+        if item is None:
+            return result
+        try:
+            ratings = job.get_result(max(deadline - monotonic(), 0))
+        except DetailsLookupError as exc:
+            return (item, error or str(exc))
+        item['infoproperties'].update(ratings)
+        return (item, error)
+
+    def get_detail_results(self, entries):
+        """Details for each entry. Entries sent only for Kodi library matching have no request."""
+        requests = [DetailsRequest(**entry['request']) for entry in entries if entry['request'] is not None]
+        deadline = monotonic() + RESPONSE_TIMEOUT
+        self.wait_for_sync(requests, deadline)
+        futures = iter(self.submit_requests(requests))
+        return [
+            self.get_result(next(futures), deadline) if entry['request'] is not None else (None, None)
+            for entry in entries]
+
+    def submit_requests(self, requests):
+        return self.server.coordinator.submit(requests)
+
+    def wait_for_sync(self, requests, deadline):
+        """Read items only once their synced play data is fresh, as lists did before building items."""
+        if not SyncPreparation.is_enabled():
+            return
+        item_types = SyncPreparation.get_item_types(request.mediatype for request in requests if request.sync_details)
+        self.server.sync_refresher.wait(item_types, timeout=max(deadline - monotonic(), 0))
+
+    @staticmethod
+    def get_result(future, deadline):
+        try:
+            return (future.result(timeout=max(deadline - monotonic(), 0)), None)
+        except DetailsLookupError as exc:
+            return (None, str(exc))
+        except FutureTimeoutError:
+            raise DetailsServiceError('Item detail lookup timed out')
+
+    @staticmethod
+    def get_entry_result(entry, result):
+        """Merge the details into the entry's list item data, if it sent any.
+        Merging runs on this handler thread so that lists do not queue behind each other."""
+        details, error = result
+        if not details or entry['item'] is None:
+            return result
+        try:
+            return (ConfiguredItemMerger(entry['item'], details).merged, None)
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:
+            return (None, f'Unable to merge item details: {exc}')
+
+    def get_kodi_results(self, entries, results):
+        """Merge Kodi library details into each item, including items whose details lookup
+        failed. Entries without list item data are details-only requests and are not enriched."""
+        items = [
+            None if entry['item'] is None else (item or entry['item'])
+            for entry, (item, error) in zip(entries, results)]
+        try:
+            enriched = KodiDetailsEnrichment(items, self.server.kodi_library_cache).enriched
+        except Exception:
+            # Library matching must not cost the batch its item details.
+            kodi_log(f'Kodi library details failed:\n{traceback.format_exc()}', 1)
+            return results
+        return [(kodi or item, error) for kodi, (item, error) in zip(enriched, results)]
+
+
+class DetailsServer(ThreadingMixIn, TCPServer):
+    request_queue_size = 128
+    allow_reuse_address = True
+
+    def __init__(self, coordinator, monitor, handler_class=DetailsRequestHandler):
+        self.coordinator = coordinator
+        self.monitor = monitor
+        self.sync_refresher = DetailsSyncRefresher()
+        self.ratings = DetailsRatingsWorker()
+        self.kodi_library_cache = KodiLibraryCache()  # Library indexes kept between lists
+        self.token = token_hex(24)
+        super().__init__(('127.0.0.1', 0), handler_class)
+
+    def server_close(self):
+        try:
+            super().server_close()
+        finally:
+            self.sync_refresher.close()
+            self.ratings.close()
+
+    def handle_error(self, request, client_address):
+        kodi_log(f'Item detail transport error:\n{traceback.format_exc()}', 1)
+
+
+class DetailsService:
+    def __init__(self):
+        self.monitor = DetailsMonitor()
+        self.location = ServiceLocation()
+        self.settings = DetailsSettings()
+        self.version = get_version()
+
+    @property
+    def is_outdated(self):
+        """The add-on was updated while this script kept running the old code."""
+        return Addon().getAddonInfo('version') != self.version
+
+    def run(self):
+        # Wait briefly so a replacement started during an outdated instance's exit
+        # still acquires the lock once the old instance releases it.
+        with SQLiteMutex(f'{self.location.name}.Instance', timeout=10) as mutex:
+            if mutex.lockstate == -1:
+                return
+            while not self.monitor.abortRequested() and not self.is_outdated:
+                try:
+                    self.run_instance()
+                except Exception:
+                    kodi_log(f'Item detail service failed:\n{traceback.format_exc()}', 1)
+                if self.monitor.waitForAbort(1):
+                    break
+
+    def run_instance(self):
+        coordinator_class, handler_class = self.get_service_classes()
+        coordinator = coordinator_class()
+        server = DetailsServer(coordinator, self.monitor, handler_class)
+        listener = Thread(target=server.serve_forever, name='TMDbHelper detail listener')
+        try:
+            self.monitor.settings_changed.clear()
+            settings = self.settings.get_snapshot()
+            coordinator.start()
+            listener.start()
+            self.location.endpoint = {
+                'port': server.server_address[1], 'token': server.token,
+                'version': self.version}
+            while not self.monitor.waitForAbort(1):
+                if self.location.restart == server.token:
+                    break
+                if self.is_settings_changed(settings):
+                    break
+                if not coordinator.is_alive() or not listener.is_alive():
+                    raise DetailsServiceUnavailable(f'Item detail worker stopped: {coordinator.failure}')
+        finally:
+            endpoint = self.location.endpoint
+            if endpoint and endpoint['token'] == server.token:
+                self.location.endpoint = None
+            if listener.is_alive():
+                server.shutdown()
+                listener.join()
+            if coordinator.ident is not None:
+                coordinator.stop()
+            server.server_close()
+
+    @staticmethod
+    def get_service_classes():
+        timer_reports = get_setting('timer_reports', 'int')
+        if timer_reports == 2:
+            from tmdbhelper.lib.items.database.details.profiling import (
+                ProfiledDetailsCoordinator, ProfiledDetailsRequestHandler,
+            )
+            return ProfiledDetailsCoordinator, ProfiledDetailsRequestHandler
+        if timer_reports == 1:
+            from tmdbhelper.lib.items.database.details.timing import (
+                TimedDetailsCoordinator,
+                TimedDetailsRequestHandler,
+            )
+            return TimedDetailsCoordinator, TimedDetailsRequestHandler
+        return DetailsCoordinator, DetailsRequestHandler
+
+    def is_settings_changed(self, settings):
+        if not self.monitor.settings_changed.is_set():
+            return False
+        self.monitor.settings_changed.clear()
+        return self.settings.get_snapshot() != settings
