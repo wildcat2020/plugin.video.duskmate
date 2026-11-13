@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addon id="plugin.video.themoviedb.helper"
-version="6.21.5"
-name="TMDb Helper"
-provider-name="jurialmunkey">
+version="6.21.5.1"
+name="TMDb Helper - Duskmate build"
+provider-name="jurialmunkey / Duskmate">
 <requires>
   <import addon="xbmc.python" version="3.0.1"/>
   <import addon="script.module.requests" version="2.9.1"/>
@@ -22,6 +22,7 @@ provider-name="jurialmunkey">
   <reuselanguageinvoker>false</reuselanguageinvoker>
   <summary lang="de_DE">TMDb Helfer</summary>
   <summary lang="en_GB">TMDb Helper</summary>
+  <summary lang="en_US">TMDb Helper - Duskmate build</summary>
   <summary lang="es_ES">Asistente TMDb</summary>
   <summary lang="zh_CN">TMDb 助手</summary>
   <description lang="de_DE">TMDb Helper liefert Details über Filme, Fernsehsendungen und Schauspieler aus TMDb. Benutzer können auf eine Vielzahl von Listen aus TMDb TVDb MDbList und Trakt zugreifen.</description>
@@ -38,6 +39,7 @@ provider-name="jurialmunkey">
   <disclaimer lang="zh_CN">数据由 TMDb、TVDb、MDbList、OMDb、FanartTV 和 Trakt 提供。部分信息由 TheTVDB.com 提供，建议您支持他们。订阅链接：https://thetvdb.com/subscribe</disclaimer>
   <license>GPL-3.0-or-later</license>
   <website>https://github.com/jurialmunkey/plugin.video.themoviedb.helper</website>
+  <source>https://github.com/wildcat2020/plugin.video.themoviedb.helper</source>
   <forum>https://forum.kodi.tv/showthread.php?tid=345847</forum>
   <assets>
     <icon>icon.png</icon>

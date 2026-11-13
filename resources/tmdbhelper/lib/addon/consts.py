@@ -101,6 +101,9 @@ UPNEXT_EPISODE = {
 
 
 ROUTE_NOID = {
+    'duskmate_status': {'route': {
+        'module_name': 'tmdbhelper.lib.duskmate.status',
+        'import_attr': 'DuskmateStatusDirectory'}},
     'dir_search': {'route': {
         'module_name': 'tmdbhelper.lib.items.directories.tmdb.lists_search',
         'import_attr': 'ListSearchDir'}},

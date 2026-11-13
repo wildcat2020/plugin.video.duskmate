@@ -134,6 +134,10 @@ class Script(object):
             lambda **kwargs: importmodule('tmdbhelper.lib.script.method.config_players', 'customise_players')(),
 
         # Library Integration
+        'duskmate_setup':
+            lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'setup')(**kwargs),
+        'duskmate_add_to_library':
+            lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'add_to_library')(**kwargs),
         'add_to_library':
             lambda **kwargs: importmodule('tmdbhelper.lib.script.method.library', 'add_to_library')(**kwargs),
         'user_list':
