@@ -4,7 +4,7 @@
 import json
 from urllib.parse import quote
 
-from tmdbhelper.lib.duskmate.integration import get_status
+from tmdbhelper.lib.duskmate.integration import get_status, setup
 
 
 class DuskmateStatusDirectory:
@@ -26,3 +26,9 @@ class DuskmateStatusDirectory:
         addDirectoryItem(self.handle, url, list_item, isFolder=False)
         endOfDirectory(self.handle, succeeded=True, cacheToDisc=False)
         return [url]
+
+
+class DuskmateSetupDirectory(DuskmateStatusDirectory):
+    def get_directory(self, items_only=False, build_items=True):
+        setup()
+        return super().get_directory(items_only=items_only, build_items=build_items)
