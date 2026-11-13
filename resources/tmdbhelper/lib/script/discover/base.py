@@ -408,7 +408,7 @@ class DiscoverMain(WindowXMLDialog):
     @property
     def path(self):
         path = '&'.join((*self.base_params, *tuple((i.paramstring for i in self.routes if i.paramstring))))
-        path = 'plugin://plugin.video.themoviedb.helper/?' + path
+        path = 'plugin://plugin.video.duskmate/?' + path
         return path
 
     @property

@@ -9,7 +9,7 @@ class PlayerListItem:
 
     @cached_property
     def uid(self):
-        if self.player.plugin_name in ('xbmc.core', 'plugin.video.themoviedb.helper'):
+        if self.player.plugin_name in ('xbmc.core', 'plugin.video.duskmate'):
             return self.player.name
         return self.player.plugin_name
 
@@ -48,7 +48,7 @@ class PlayerListItem:
 class PlayerListItemCombined(PlayerListItem):
     @cached_property
     def label(self):
-        if self.player.plugin_name in ('xbmc.core', 'plugin.video.themoviedb.helper'):
+        if self.player.plugin_name in ('xbmc.core', 'plugin.video.duskmate'):
             return self.player.name
         from xbmcaddon import Addon as KodiAddon
         return KodiAddon(self.player.plugin_name).getAddonInfo('name')

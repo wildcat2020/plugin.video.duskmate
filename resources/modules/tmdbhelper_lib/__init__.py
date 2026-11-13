@@ -26,7 +26,7 @@ class _Finder:
                 sys.path.remove(self._path)
 
     basename = 'tmdbhelper.lib'
-    sys_path_loader = SysPathLoader('plugin.video.themoviedb.helper', 'resources')
+    sys_path_loader = SysPathLoader('plugin.video.duskmate', 'resources')
 
     @classmethod
     def find_spec(cls, fullname, path, target=None):

@@ -67,7 +67,7 @@ class PlayerItemLocalMovie(PlayerItemBasic):
             return
         if not self.kodi_file_contents:  # Not a .strm so send file
             return self.kodi_file
-        if self.kodi_file_contents.startswith('plugin://plugin.video.themoviedb.helper'):  # Avoid recursive loop
+        if self.kodi_file_contents.startswith('plugin://plugin.video.duskmate'):  # Avoid recursive loop
             return
         return self.kodi_file_contents
         # if self.details:  # Add dbid to details to update our local progress.

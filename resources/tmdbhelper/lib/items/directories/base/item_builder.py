@@ -13,7 +13,7 @@ class BaseDirItemBuilder:
     def context_menu(self):
         context_menu = [(
             get_localized(32309),
-            'Runscript(plugin.video.themoviedb.helper,sort_list,{})'.format(
+            'Runscript(plugin.video.duskmate,sort_list,{})'.format(
                 ','.join(f'{k}={v}' for k, v in self.params.items()))
         )] if self.base_item.sorting else []
         return context_menu

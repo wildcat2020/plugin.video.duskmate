@@ -144,7 +144,7 @@ class BrowseNextEpisodesContextMenu:
             return []
         return [
             (
-                '$ADDON[plugin.video.themoviedb.helper 32770]',
+                '$ADDON[plugin.video.duskmate 32770]',
                 f'Container.Update("{self.url}")',
             ),
         ]

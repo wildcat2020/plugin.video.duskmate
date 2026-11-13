@@ -29,7 +29,7 @@ class NextMovieItemMapper(ItemMapper):
 
     def get_context_menu(self):
         command = (
-            'RunScript(plugin.video.themoviedb.helper,drop_collection,'
+            'RunScript(plugin.video.duskmate,drop_collection,'
             f'collection_id={self.meta["collection_id"]})')
         return super().get_context_menu() + [(get_localized(32607), command)]
 

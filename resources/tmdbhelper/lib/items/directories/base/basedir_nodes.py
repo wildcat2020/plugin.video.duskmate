@@ -71,7 +71,7 @@ class BaseDirNodeCustomItem:
         return [
             (
                 get_localized(32152),
-                f'RunScript(plugin.video.themoviedb.helper,remove_node,file={self.file},name={self.name})'
+                f'RunScript(plugin.video.duskmate,remove_node,file={self.file},name={self.name})'
             )
         ]
 

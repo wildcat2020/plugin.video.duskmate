@@ -10,7 +10,7 @@ reproducible, and straightforward to review.
   to keep its dependencies up to date.
 - Search existing issues, including closed issues, for the same bug or request.
   Add relevant information to an existing discussion instead of opening a duplicate.
-- Check the [wiki](https://github.com/jurialmunkey/plugin.video.themoviedb.helper/wiki)
+- Check the [upstream wiki](https://github.com/jurialmunkey/plugin.video.themoviedb.helper/wiki)
   for existing functionality and usage instructions.
 - Read the [AI usage policy](AI_USAGE.md).
 - Use the appropriate issue template and complete its required fields.

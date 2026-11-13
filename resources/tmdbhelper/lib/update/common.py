@@ -16,7 +16,7 @@ class LibraryCommon():
     def get_basedir(mediatype):
         from tmdbhelper.lib.addon.plugin import get_setting
         basedir = get_setting(f'{mediatype}_library', 'str')
-        basedir = basedir or f'special://profile/addon_data/plugin.video.themoviedb.helper/{mediatype}/'
+        basedir = basedir or f'special://profile/addon_data/plugin.video.duskmate/{mediatype}/'
         return basedir
 
     @staticmethod

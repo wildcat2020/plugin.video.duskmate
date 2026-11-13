@@ -28,6 +28,6 @@ def log_request(**kwargs):
         dumps_to_file(kwargs, 'log_request', filename)
         msg = (
             f'[B]{kwargs["url"]}[/B]\n\n{xbmcvfs.translatePath("special://profile/addon_data/")}\n'
-            f'plugin.video.themoviedb.helper/log_request\n{filename}')
+            f'plugin.video.duskmate/log_request\n{filename}')
         Dialog().ok(kwargs['log_request'].capitalize(), msg)
         Dialog().textviewer(filename, dumps(kwargs['response'], indent=2))

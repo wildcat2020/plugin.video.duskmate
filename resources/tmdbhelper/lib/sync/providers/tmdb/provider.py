@@ -10,7 +10,7 @@ class Provider(SyncProvider):
     interface_version = 4
     provider_id = 'tmdb'
     display_name = 'TMDb'
-    addon_id = 'plugin.video.themoviedb.helper'
+    addon_id = 'plugin.video.duskmate'
     list_routes = LIST_ROUTES
     ratings_classes = {
         'movie': TMDbRatingsSupplier,

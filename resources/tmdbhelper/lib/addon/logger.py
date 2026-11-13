@@ -5,7 +5,7 @@ import jurialmunkey.logger as jurialmunkey_logger
 
 
 LOGGER = jurialmunkey_logger.Logger(
-    log_name='[plugin.video.themoviedb.helper]\n',
+    log_name='[plugin.video.duskmate]\n',
     notification_head=f'TheMovieDb Helper {get_localized(257)}',
     notification_text=get_localized(2104),
     debug_logging=get_setting('debug_logging'))

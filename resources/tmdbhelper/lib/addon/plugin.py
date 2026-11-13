@@ -6,18 +6,18 @@ from tmdbhelper.lib.addon.consts import LANGUAGES
 """ Top level module only import constants """
 
 
-KODIPLUGIN = jurialmunkey.plugin.KodiPlugin('plugin.video.themoviedb.helper')
+KODIPLUGIN = jurialmunkey.plugin.KodiPlugin('plugin.video.duskmate')
 ADDON = KODIPLUGIN._addon
 ADDONPATH = KODIPLUGIN._addon_path
 ADDONNAME = KODIPLUGIN._addon_name
-ADDONDATA = 'special://profile/addon_data/plugin.video.themoviedb.helper/'
-PLUGINPATH = u'plugin://plugin.video.themoviedb.helper/'
+ADDONDATA = 'special://profile/addon_data/plugin.video.duskmate/'
+PLUGINPATH = u'plugin://plugin.video.duskmate/'
 
 get_setting = KODIPLUGIN.get_setting
 set_setting = KODIPLUGIN.set_setting
 get_localized = KODIPLUGIN.get_localized
 
-encode_url = jurialmunkey.parser.EncodeURL(u'plugin://plugin.video.themoviedb.helper/').encode_url
+encode_url = jurialmunkey.parser.EncodeURL(u'plugin://plugin.video.duskmate/').encode_url
 
 executebuiltin = xbmc.executebuiltin
 get_condvisibility = xbmc.getCondVisibility

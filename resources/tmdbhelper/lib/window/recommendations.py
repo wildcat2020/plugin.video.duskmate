@@ -29,7 +29,7 @@ ID_VIDEOINFO = 12003
 
 
 """
-Runscript(plugin.video.themoviedb.helper,recommendations=)
+Runscript(plugin.video.duskmate,recommendations=)
 recommendations=list_id(int)|paramstring(str)|related(bool)|action(str)|close(str) [Separate multiples with || ]
     * The lists to add. Separate additional lists with ||
     * list_id: the container that the items will be added

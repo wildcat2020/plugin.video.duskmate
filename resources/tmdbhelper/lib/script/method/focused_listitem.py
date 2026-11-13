@@ -37,7 +37,7 @@ class FocusedListItemMedia:
 
     @cached_property
     def is_tmdbhelper(self):
-        return self.url.startswith('plugin://plugin.video.themoviedb.helper/?')
+        return self.url.startswith('plugin://plugin.video.duskmate/?')
 
     @cached_property
     def params(self):

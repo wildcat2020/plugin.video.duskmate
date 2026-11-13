@@ -104,7 +104,7 @@ Keep the existing addon ID and the dependency on TMDbHelper; core must not add
 reverse dependencies on providers.
 
 The script entry point calls
-`RunScript(plugin.video.themoviedb.helper,configure_sync_provider,addon_id=<addon_id>)`
+`RunScript(plugin.video.duskmate,configure_sync_provider,addon_id=<addon_id>)`
 through `xbmc.executebuiltin`. The core route delegates to
 `SyncProviderOnboarding(addon_id).configure()`, reusing the Default, Cancel,
 and Custom configuration flow. Running a provider does not change selections
@@ -433,7 +433,7 @@ provider code still requires a new invocation.
 External provider addons are maintained separately from the plugin. Install each
 external provider
 in its own `script.module.tmdbhelper.sync.<service>` folder alongside
-`plugin.video.themoviedb.helper` in Kodi's addons directory. The plugin contains
+`plugin.video.duskmate` in Kodi's addons directory. The plugin contains
 the shared interfaces, registry, and internal TMDb/OMDb providers; external provider
 implementations and artwork belong in the standalone modules.
 
@@ -485,7 +485,7 @@ When core starts relying on something new from provider-supplied classes:
   minimum interface versions. Older providers are then rejected at load and are
   unavailable until they update.
 - When a provider relies on new core behaviour, increase the minimum
-  `plugin.video.themoviedb.helper` version imported by its `addon.xml`. Kodi
+  `plugin.video.duskmate` version imported by its `addon.xml`. Kodi
   enforces that direction, so the provider cannot run on an older core.
 - Record each interface version below.
 
@@ -817,7 +817,7 @@ does not change item-details database ownership or the finalisation pipeline.
 
 ## Provider module manager
 
-Run `RunScript(plugin.video.themoviedb.helper,manage_provider_modules)` to manage
+Run `RunScript(plugin.video.duskmate,manage_provider_modules)` to manage
 installed provider modules, including disabled third-party modules, and install
 missing modules from the trusted catalogue. Selecting an entry installs, enables,
 or disables it; the dialog refreshes after each action. The internal TMDb provider

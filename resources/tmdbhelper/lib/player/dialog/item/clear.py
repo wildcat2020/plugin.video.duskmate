@@ -6,7 +6,7 @@ from tmdbhelper.lib.addon.plugin import get_localized
 class PlayerItemClearDefault(PlayerItemBasic):
 
     is_valid = True
-    plugin_name = 'plugin.video.themoviedb.helper'
+    plugin_name = 'plugin.video.duskmate'
 
     @cached_property
     def name(self):

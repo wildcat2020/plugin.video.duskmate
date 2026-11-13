@@ -8,7 +8,7 @@ class Provider(SyncProvider):
     interface_version = 4
     provider_id = 'omdb'
     display_name = 'OMDb'
-    addon_id = 'plugin.video.themoviedb.helper'
+    addon_id = 'plugin.video.duskmate'
     ratings_classes = {
         'movie': OMDbRatingsSupplier,
         'tvshow': OMDbRatingsSupplier,

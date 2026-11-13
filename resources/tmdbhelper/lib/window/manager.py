@@ -74,7 +74,7 @@ class PathConstructor:
             return f'{base}?{pstr}'
 
         if self.tmdb_type and self.tmdb_id:
-            base = 'plugin://plugin.video.themoviedb.helper/'
+            base = 'plugin://plugin.video.duskmate/'
             pstr = f'info=details&tmdb_type={self.tmdb_type_path}&tmdb_id={self.tmdb_id}{self.pstr_affix}'
             return f'{base}?{pstr}'
 

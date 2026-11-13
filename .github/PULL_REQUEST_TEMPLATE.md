@@ -25,7 +25,7 @@ isolated checks from testing performed in Kodi. Do not claim checks you did not 
 
 ## Checklist
 
-- [ ] I have read the [contributing guide](https://github.com/jurialmunkey/plugin.video.themoviedb.helper/blob/nexus/CONTRIBUTING.md) and [AI usage policy](https://github.com/jurialmunkey/plugin.video.themoviedb.helper/blob/nexus/AI_USAGE.md).
+- [ ] I have read the [contributing guide](https://github.com/jurialmunkey/plugin.video.duskmate/blob/nexus/CONTRIBUTING.md) and [AI usage policy](https://github.com/jurialmunkey/plugin.video.duskmate/blob/nexus/AI_USAGE.md).
 - [ ] I have linked a relevant bug report or feature request above.
-- [ ] I have followed the project [coding conventions](https://github.com/jurialmunkey/plugin.video.themoviedb.helper/blob/nexus/AGENTS.md).
+- [ ] I have followed the project [coding conventions](https://github.com/jurialmunkey/plugin.video.duskmate/blob/nexus/AGENTS.md).
 - [ ] I have described the checks performed, their results, and any limitations.

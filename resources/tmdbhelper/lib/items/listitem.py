@@ -453,7 +453,7 @@ class _Video(_ListItem):
 
     @property
     def context_menu_selectplayer(self):
-        head = '$ADDON[plugin.video.themoviedb.helper 32322]'
+        head = '$ADDON[plugin.video.duskmate 32322]'
         path = f'RunPlugin({self.url}&ignore_default=true)'
         return (head, path)
 
@@ -470,8 +470,8 @@ class _Video(_ListItem):
 
     @property
     def context_menu_choosedefault(self):
-        head = '$ADDON[plugin.video.themoviedb.helper 32476]'
-        path = f'Runscript(plugin.video.themoviedb.helper,{self.context_menu_choosedefault_paramstring})'
+        head = '$ADDON[plugin.video.duskmate 32476]'
+        path = f'Runscript(plugin.video.duskmate,{self.context_menu_choosedefault_paramstring})'
         return (head, path)
 
 

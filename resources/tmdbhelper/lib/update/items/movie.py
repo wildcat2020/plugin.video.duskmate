@@ -6,7 +6,7 @@ class LibraryMovie(LibraryMedia):
 
     mediatype = 'movie'
     tmdb_type = 'movie'
-    strm_fstr = 'plugin://plugin.video.themoviedb.helper/?info=play&tmdb_id={tmdb_id}&tmdb_type=movie&islocal=True'
+    strm_fstr = 'plugin://plugin.video.duskmate/?info=play&tmdb_id={tmdb_id}&tmdb_type=movie&islocal=True'
     base_type = 'movies'
 
     @cached_property

@@ -7,31 +7,31 @@ from tmdbhelper.lib.addon.plugin import get_setting
 
 CONTEXT_MENU_ITEMS = {
     # Browse Lists
-    '$ADDON[plugin.video.themoviedb.helper 32235]': {
-        'command': 'RunScript(plugin.video.themoviedb.helper,related_lists,{})',
+    '$ADDON[plugin.video.duskmate 32235]': {
+        'command': 'RunScript(plugin.video.duskmate,related_lists,{})',
         'setting': 'contextmenu_related_lists',
         'episode': {'tmdb_type': 'tv', 'tmdb_id': '{tmdb_id}', 'season': '{season}', 'episode': '{episode}'},
         'other': {'tmdb_type': '{tmdb_type}', 'tmdb_id': '{tmdb_id}'}
     },
     # Sync Options
-    '$ADDON[plugin.video.themoviedb.helper 32549]': {
-        'command': 'RunScript(plugin.video.themoviedb.helper,sync_options,{})',
+    '$ADDON[plugin.video.duskmate 32549]': {
+        'command': 'RunScript(plugin.video.duskmate,sync_options,{})',
         'setting': 'contextmenu_sync_options',
         'season': {'tmdb_type': 'tv', 'tmdb_id': '{tmdb_id}', 'season': '{season}'},
         'episode': {'tmdb_type': 'tv', 'tmdb_id': '{tmdb_id}', 'season': '{season}', 'episode': '{episode}'},
         'other': {'tmdb_type': '{tmdb_type}', 'tmdb_id': '{tmdb_id}'}
     },
     # Refresh Details
-    '$ADDON[plugin.video.themoviedb.helper 32233]': {
-        'command': 'RunScript(plugin.video.themoviedb.helper,refresh_details,{})',
+    '$ADDON[plugin.video.duskmate 32233]': {
+        'command': 'RunScript(plugin.video.duskmate,refresh_details,{})',
         'setting': 'contextmenu_refresh_details',
         'episode': {'tmdb_type': 'tv', 'tmdb_id': '{tmdb_id}', 'season': '{season}', 'episode': '{episode}'},
         'season': {'tmdb_type': 'tv', 'tmdb_id': '{tmdb_id}', 'season': '{season}'},
         'other': {'tmdb_type': '{tmdb_type}', 'tmdb_id': '{tmdb_id}'}
     },
     # Modify Artwork
-    '$ADDON[plugin.video.themoviedb.helper 32118]': {
-        'command': 'RunScript(plugin.video.themoviedb.helper,modify_artwork,{})',
+    '$ADDON[plugin.video.duskmate 32118]': {
+        'command': 'RunScript(plugin.video.duskmate,modify_artwork,{})',
         'setting': 'contextmenu_modify_artwork',
         'movie': {'tmdb_type': '{tmdb_type}', 'tmdb_id': '{tmdb_id}'},
         'tvshow': {'tmdb_type': '{tmdb_type}', 'tmdb_id': '{tmdb_id}'},
@@ -40,7 +40,7 @@ CONTEXT_MENU_ITEMS = {
     },
     # Add to Library
     '$LOCALIZE[20444]': {
-        'command': 'RunScript(plugin.video.themoviedb.helper,add_to_library,{})',
+        'command': 'RunScript(plugin.video.duskmate,add_to_library,{})',
         'setting': 'contextmenu_add_to_library',
         'movie': {'tmdb_type': '{tmdb_type}', 'tmdb_id': '{tmdb_id}'},
         'tvshow': {'tmdb_type': '{tmdb_type}', 'tmdb_id': '{tmdb_id}'},

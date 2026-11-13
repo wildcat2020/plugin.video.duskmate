@@ -4,7 +4,7 @@ from tmdbhelper.lib.update.items.media import LibraryMedia
 
 class LibraryEpisode(LibraryMedia):
 
-    strm_fstr = 'plugin://plugin.video.themoviedb.helper/?info=play&tmdb_type=tv&islocal=True&tmdb_id={tmdb_id}&season={season}&episode={episode}'
+    strm_fstr = 'plugin://plugin.video.duskmate/?info=play&tmdb_type=tv&islocal=True&tmdb_id={tmdb_id}&season={season}&episode={episode}'
     mediatype = 'episode'
     base_type = 'tvshows'
     tmdb_type = 'tv'

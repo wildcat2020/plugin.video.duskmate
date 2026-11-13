@@ -39,7 +39,7 @@ class DirectCallAutoInfoDialog:
     def get_listitem(self):
         if not self.paramstring:
             return
-        if self.base == 'plugin://plugin.video.themoviedb.helper/':
+        if self.base == 'plugin://plugin.video.duskmate/':
             return self.get_listitem_tmdb()
         if self.base == 'plugin://script.skinvariables/':
             return self.get_listitem_kodi()

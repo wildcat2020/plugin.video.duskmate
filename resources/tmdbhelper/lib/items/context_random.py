@@ -109,7 +109,7 @@ class PlayRandomContextMenu:
         path = quote(f'{PLUGINPATH}?{self.folder.paramstring}', safe='')
         return [
             (
-                '$ADDON[plugin.video.themoviedb.helper 32767]',
-                f'RunScript(plugin.video.themoviedb.helper,play_random={path})',
+                '$ADDON[plugin.video.duskmate 32767]',
+                f'RunScript(plugin.video.duskmate,play_random={path})',
             ),
         ]

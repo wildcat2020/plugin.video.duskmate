@@ -144,7 +144,7 @@ class TMDbNode:
         if self.meta['list']:
             executebuiltin('Container.Refresh')
         else:  # If there are no items left in the list then we'll get kicked out so go back to base dir
-            executebuiltin('Container.Update(plugin://plugin.video.themoviedb.helper/?info=dir_custom_node&tmdb_type=None)')
+            executebuiltin('Container.Update(plugin://plugin.video.duskmate/?info=dir_custom_node&tmdb_type=None)')
 
 
 def make_node(name=None, icon=None, path=None, file=None, **kwargs):

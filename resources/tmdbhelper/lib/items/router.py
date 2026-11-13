@@ -6,7 +6,7 @@ class Router():
     def __init__(self, handle, paramstring):
         # plugin:// params configuration
         self.handle = handle  # plugin:// handle
-        self.paramstring, *secondary_params = paramstring.split('&&')  # plugin://plugin.video.themoviedb.helper?paramstring
+        self.paramstring, *secondary_params = paramstring.split('&&')  # plugin://plugin.video.duskmate?paramstring
         self.params = reconfigure_legacy_params(**parse_paramstring(self.paramstring))  # paramstring dictionary
         self.params.update(self.configure_paths(secondary_params))
 

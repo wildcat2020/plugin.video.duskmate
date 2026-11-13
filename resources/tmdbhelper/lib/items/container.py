@@ -22,7 +22,7 @@ class ContainerDirectoryCommon(CommonContainerAPIs):
     def __init__(self, handle, paramstring, **kwargs):
         # plugin:// params configuration
         self.handle = handle  # plugin:// handle
-        self.paramstring = paramstring  # plugin://plugin.video.themoviedb.helper?paramstring
+        self.paramstring = paramstring  # plugin://plugin.video.duskmate?paramstring
         self.params = kwargs  # paramstring dictionary
         self.parent_params = kwargs.copy()  # TODO: CLEANUP
 
@@ -99,7 +99,7 @@ class ContainerDirectoryCommon(CommonContainerAPIs):
     @cached_property
     def context_additions(self):
         if self.context_additions_make_node:
-            return [(get_localized(32496), 'RunScript(plugin.video.themoviedb.helper,make_node)')]
+            return [(get_localized(32496), 'RunScript(plugin.video.duskmate,make_node)')]
         return []
 
     @cached_property

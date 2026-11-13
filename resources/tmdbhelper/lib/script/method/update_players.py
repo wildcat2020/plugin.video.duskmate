@@ -15,6 +15,6 @@ def update_players():
         return
     set_setting('players_url', players_url, 'str')
     downloader = Downloader(
-        extract_to='special://profile/addon_data/plugin.video.themoviedb.helper/players',
+        extract_to='special://profile/addon_data/plugin.video.duskmate/players',
         download_url=players_url)
     downloader.get_extracted_zip()

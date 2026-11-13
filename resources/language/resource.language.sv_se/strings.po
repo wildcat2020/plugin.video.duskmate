@@ -1,6 +1,6 @@
 # XBMC Media Center Swedish language file
 # Addon Name: TheMovieDb Helper
-# Addon id: plugin.video.themoviedb.helper
+# Addon id: plugin.video.duskmate
 # Addon Provider: jurialmunkey
 msgid ""
 msgstr ""

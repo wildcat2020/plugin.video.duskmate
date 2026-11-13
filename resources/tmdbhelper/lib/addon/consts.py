@@ -13,8 +13,8 @@ DATALEVEL_MAX = 5
 SQLITE_FALSE = 0
 SQLITE_TRUE = 1
 
-NODE_BASEDIR = 'special://profile/addon_data/plugin.video.themoviedb.helper/nodes/'
-RUNSCRIPT = 'Runscript(plugin.video.themoviedb.helper,{})'
+NODE_BASEDIR = 'special://profile/addon_data/plugin.video.duskmate/nodes/'
+RUNSCRIPT = 'Runscript(plugin.video.duskmate,{})'
 
 LANGUAGES = (
     'ar-AE', 'ar-SA', 'be-BY', 'bg-BG', 'bn-BD', 'ca-ES', 'ch-GU', 'cs-CZ', 'da-DK', 'de-AT', 'de-CH',
@@ -59,10 +59,10 @@ PLAYERS_URLENCODE = (
     'name', 'showname', 'clearname', 'tvshowtitle', 'title', 'thumbnail', 'poster', 'fanart',
     'originaltitle', 'plot', 'cast', 'actors')
 
-PLAYERS_BASEDIR_USER = 'special://profile/addon_data/plugin.video.themoviedb.helper/players/'
-PLAYERS_BASEDIR_SAVE = 'special://profile/addon_data/plugin.video.themoviedb.helper/reconfigured_players/'
-PLAYERS_BASEDIR_BUNDLED = 'special://home/addons/plugin.video.themoviedb.helper/resources/players/'
-PLAYERS_BASEDIR_TEMPLATES = 'special://home/addons/plugin.video.themoviedb.helper/resources/templates/'
+PLAYERS_BASEDIR_USER = 'special://profile/addon_data/plugin.video.duskmate/players/'
+PLAYERS_BASEDIR_SAVE = 'special://profile/addon_data/plugin.video.duskmate/reconfigured_players/'
+PLAYERS_BASEDIR_BUNDLED = 'special://home/addons/plugin.video.duskmate/resources/players/'
+PLAYERS_BASEDIR_TEMPLATES = 'special://home/addons/plugin.video.duskmate/resources/templates/'
 PLAYERS_PRIORITY = 1000
 PLAYERS_CHOSEN_DEFAULTS_FILENAME = 'player_defaults'
 
