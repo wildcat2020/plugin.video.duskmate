@@ -441,7 +441,7 @@ Install the provider-enabled TMDbHelper build together with matching provider
 versions. The dependency version alone cannot distinguish a development checkout
 from an older checkout with the same version.
 
-The Kodi provider (`script.module.tmdbhelper.sync.kodi`) reads the active profile's
+The Kodi provider (`script.module.duskmate.sync.kodi`) reads the active profile's
 video library through JSON-RPC. Library membership supplies collection; playcounts,
 last-played dates, and resume points supply history/progress. Next episodes are
 limited to available local library episodes. Kodi collection is read-only through
@@ -559,7 +559,7 @@ sorting containers. Library monitoring uses its own supplier interface below,
 without constructing directory containers. Service-specific API clients and
 response mappings belong to their provider modules. MDbList setup, list URLs,
 script commands, localization, and implementation details are documented in the
-[module README](https://github.com/jurialmunkey/script.module.tmdbhelper.sync.mdblist/blob/main/README.md).
+[module README](https://github.com/wildcat2020/script.module.duskmate.sync.mdblist/blob/main/README.md).
 
 Trakt registers a single `trakt_directory` root. Grouped browsing, genres,
 calendar period menus, Random, and Discover live under that root. Core Movie,
@@ -577,7 +577,7 @@ preserved. The shared `mapper_standard` classes and factory remain in core
 because MDbList also uses them. Core's `lists_calendar` retains episode stacking
 used by both Trakt and the local library calendar, with no provider import.
 The Trakt module owns its API/authentication package in
-`tmdbhelper_sync_trakt.api`, including client ID configuration and its pagination
+`duskmate_sync_trakt.api`, including client ID configuration and its pagination
 limit. Its provider factory, discover dialog, and directory authorization helper
 use the module-owned classes. The client continues to inherit core's generic
 `NoCacheRequestAPI`.
@@ -791,8 +791,8 @@ in the module's documentation.
 
 ## Browsing-only providers
 
-`script.module.tmdbhelper.sync.tvdb` and
-`script.module.tmdbhelper.sync.gemini` use interface version 4 with only the
+`script.module.duskmate.sync.tvdb` and
+`script.module.duskmate.sync.gemini` use interface version 4 with only the
 `lists` capability. They own their API clients, settings, artwork, root entries,
 directory properties and output mappers. Their script entry points use
 `open_sync_provider_settings` to open API settings without assigning sync

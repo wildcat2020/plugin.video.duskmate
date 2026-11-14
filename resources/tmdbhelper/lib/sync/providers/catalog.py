@@ -14,22 +14,22 @@ PROVIDERS = {
             'list_actions',
         ),
     },
-    'script.module.tmdbhelper.sync.mdblist': {
+    'script.module.duskmate.sync.mdblist': {
         'provider_id': 'mdblist',
         'display_name': 'MDbList',
         'capabilities': ('watched', 'watchlist', 'collection', 'scrobbling', 'lists', 'ratings', 'monitor_lists', 'service_actions'),
     },
-    'script.module.tmdbhelper.sync.tvdb': {
+    'script.module.duskmate.sync.tvdb': {
         'provider_id': 'tvdb',
         'display_name': 'TVDb',
         'capabilities': ('lists',),
     },
-    'script.module.tmdbhelper.sync.gemini': {
+    'script.module.duskmate.sync.gemini': {
         'provider_id': 'gemini',
         'display_name': 'Gemini',
         'capabilities': ('lists',),
     },
-    'script.module.tmdbhelper.sync.kodi': {
+    'script.module.duskmate.sync.kodi': {
         'provider_id': 'kodi',
         'display_name': 'Kodi',
         'capabilities': ('watched', 'collection', 'scrobbling'),

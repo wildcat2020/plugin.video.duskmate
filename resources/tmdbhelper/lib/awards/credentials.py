@@ -38,7 +38,7 @@ class AddonCredentials:
 class TVDbModuleCredentials(AddonCredentials):
     directory = (
         Path(__file__).resolve().parents[5]
-        / 'script.module.tmdbhelper.sync.tvdb' / 'resources' / 'lib' / 'tmdbhelper_sync_tvdb')
+        / 'script.module.duskmate.sync.tvdb' / 'resources' / 'lib' / 'duskmate_sync_tvdb')
 
     def get_api_key(self):
         return super().get_api_key('api_keys')

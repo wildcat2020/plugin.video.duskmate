@@ -736,7 +736,7 @@
                     <level>0</level>
                     <control type="button" format="action">
                         <close>true</close>
-                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.tmdbhelper.sync.mdblist)</data>
+                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.duskmate.sync.mdblist)</data>
                     </control>
                 </setting>
             </group>
@@ -772,14 +772,14 @@
                     <level>0</level>
                     <control type="button" format="action">
                         <close>true</close>
-                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.tmdbhelper.sync.gemini)</data>
+                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.duskmate.sync.gemini)</data>
                     </control>
                 </setting>
                 <setting id="tvdb_settings" type="action" label="32738" help="32739">
                     <level>0</level>
                     <control type="button" format="action">
                         <close>true</close>
-                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.tmdbhelper.sync.tvdb)</data>
+                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.duskmate.sync.tvdb)</data>
                     </control>
                 </setting>
                 <setting id="fanarttv_clientkey" type="string" label="32019" help="32674">
