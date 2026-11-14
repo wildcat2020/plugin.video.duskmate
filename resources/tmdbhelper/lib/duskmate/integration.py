@@ -2,7 +2,10 @@
 # Upstream: jurialmunkey/plugin.video.themoviedb.helper
 # License: GPL v.3 https://www.gnu.org/copyleft/gpl.html
 import json
+import os
+import re
 import time
+from xml.etree import ElementTree
 from base64 import urlsafe_b64decode
 from binascii import Error as Base64Error
 from hashlib import sha256
@@ -13,10 +16,15 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '8'
+DUSKMATE_BUILD = '9'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
+SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
 CURATED_FOLDER = 'Duskmate Curated'
+LIBRARY_SOURCES = {
+    'movies': 'Duskmate Movies',
+    'tvshows': 'Duskmate TV Shows',
+}
 
 
 def _library_paths():
@@ -50,6 +58,127 @@ def _paths_ready(paths, create=False):
             path_exists = exists(path) or exists(translated)
         ready = path_exists and ready
     return ready
+
+
+def _normalise_path(path):
+    return (path or '').replace(chr(92), '/').rstrip('/').lower()
+
+
+def _ensure_video_sources(paths):
+    """Add the two Duskmate folders to Kodi's ordinary video-source file.
+
+    Kodi 21 has no JSON-RPC method for adding a source or assigning its content.  Writing the
+    documented sources.xml entry is safe and leaves the content decision to Kodi's own native
+    Set content dialog, which the Duskmate installation wizard opens immediately afterwards.
+    """
+    from xbmcvfs import File, exists, mkdirs, translatePath
+
+    profile = 'special://profile/'
+    if not exists(profile):
+        mkdirs(profile)
+    root = None
+    if exists(SOURCES_FILE):
+        source_file = File(SOURCES_FILE)
+        try:
+            raw = source_file.read() or ''
+        finally:
+            source_file.close()
+        if raw.strip():
+            try:
+                root = ElementTree.fromstring(raw)
+            except ElementTree.ParseError:
+                # Never replace a malformed user file. The wizard will report setup as incomplete
+                # and the Kodi log will retain the parsing failure for diagnosis.
+                return False
+    if root is None:
+        root = ElementTree.Element('sources')
+    video = root.find('video')
+    if video is None:
+        video = ElementTree.SubElement(root, 'video')
+
+    existing = {
+        _normalise_path(path_node.text)
+        for path_node in video.findall('./source/path')
+        if path_node.text
+    }
+    changed = False
+    for key, path in paths.items():
+        if _normalise_path(path) in existing:
+            continue
+        source = ElementTree.SubElement(video, 'source')
+        ElementTree.SubElement(source, 'name').text = LIBRARY_SOURCES[key]
+        path_node = ElementTree.SubElement(source, 'path', {'pathversion': '1'})
+        path_node.text = path
+        ElementTree.SubElement(source, 'allowsharing').text = 'true'
+        changed = True
+
+    if changed or not exists(SOURCES_FILE):
+        xml = ElementTree.tostring(root, encoding='utf-8', xml_declaration=True).decode('utf-8')
+        source_file = File(SOURCES_FILE, 'w')
+        try:
+            source_file.write(xml)
+        finally:
+            source_file.close()
+
+    # Re-read what was persisted rather than treating a successful write call as proof.
+    source_file = File(SOURCES_FILE)
+    try:
+        persisted = ElementTree.fromstring(source_file.read() or '')
+    except (ElementTree.ParseError, TypeError, ValueError):
+        return False
+    finally:
+        source_file.close()
+    persisted_paths = {
+        _normalise_path(node.text)
+        for node in persisted.findall('./video/source/path')
+        if node.text
+    }
+    return all(_normalise_path(path) in persisted_paths for path in paths.values())
+
+
+def _video_database_file():
+    from xbmcvfs import listdir, translatePath
+    database_dir = 'special://database/'
+    _, files = listdir(database_dir)
+    candidates = []
+    for filename in files:
+        match = re.fullmatch(r'MyVideos(\d+)\.db', filename, re.IGNORECASE)
+        if match:
+            candidates.append((int(match.group(1)), filename))
+    if not candidates:
+        return ''
+    return os.path.join(translatePath(database_dir), max(candidates)[1])
+
+
+def _content_bindings(paths):
+    """Read Kodi's own content bindings without ever modifying its database."""
+    try:
+        import sqlite3
+    except ImportError:
+        return {'movies': False, 'tvshows': False}
+    bindings = {'movies': False, 'tvshows': False}
+    database = _video_database_file()
+    if not database:
+        return bindings
+    try:
+        connection = sqlite3.connect(f'file:{database}?mode=ro', uri=True, timeout=1)
+        try:
+            rows = connection.execute(
+                "SELECT strPath, strContent FROM path WHERE strContent IN ('movies', 'tvshows')"
+            ).fetchall()
+        finally:
+            connection.close()
+    except (OSError, sqlite3.Error):
+        return bindings
+
+    from xbmcvfs import translatePath
+    for key, path in paths.items():
+        candidates = {_normalise_path(path), _normalise_path(translatePath(path))}
+        bindings[key] = any(
+            content == key and _normalise_path(row_path) in candidates
+            for row_path, content in rows
+        )
+    return bindings
 
 
 def _read_state():
@@ -107,16 +236,27 @@ def _trakt_sync_status():
 
 
 def get_status():
+    from xbmc import getLocalizedString
     paths = _library_paths()
+    bindings = _content_bindings(paths)
     state = _read_state()
     curated = state.get('curated', {})
     return {
-        'schema': 2,
+        'schema': 3,
         'addon_version': get_version(),
         'upstream_version': UPSTREAM_VERSION,
         'duskmate_build': DUSKMATE_BUILD,
-        'library_ready': _paths_ready(paths),
+        'library_ready': _paths_ready(paths) and all(bindings.values()),
         'library_paths': paths,
+        'library_sources': LIBRARY_SOURCES,
+        'library_content': bindings,
+        'kodi_labels': {
+            'set_content': getLocalizedString(20333),
+            'change_content': getLocalizedString(20442),
+            'movies': getLocalizedString(20342),
+            'tvshows': getLocalizedString(20343),
+            'ok': getLocalizedString(186),
+        },
         'last_add': state.get('last_add'),
         'curated': {
             'generation': curated.get('generation', ''),
@@ -130,9 +270,17 @@ def get_status():
 
 def setup(**kwargs):
     paths = _library_paths()
-    ready = _paths_ready(paths, create=True)
+    paths_ready = _paths_ready(paths, create=True)
+    sources_ready = _ensure_video_sources(paths) if paths_ready else False
+    bindings = _content_bindings(paths)
+    ready = paths_ready and sources_ready and all(bindings.values())
     state = _read_state()
-    state['setup'] = {'library_ready': ready, 'library_paths': paths}
+    state['setup'] = {
+        'library_ready': ready,
+        'library_paths': paths,
+        'library_sources_ready': sources_ready,
+        'library_content': bindings,
+    }
     _write_state(state)
     return ready
 
