@@ -35,7 +35,7 @@ Sync icons use the XCF's blue-to-purple gradient and a function label.
 TMDb icons retain the existing cyan
 palette and TMDb footer. TVDb category icons retain their background and
 provider footer. Trakt and MDbList artwork, including type variants, is shipped in
-`script.module.tmdbhelper.sync.trakt/resources/icons/trakt/` and
+`script.module.duskmate.sync.trakt/resources/icons/trakt/` and
 `script.module.tmdbhelper.sync.mdblist/resources/icons/mdblist/` respectively and
 is no longer part of these core build manifests. Shared calendar period selectors use the
 neutral `common/calendar.png` because both library and Trakt routes use them.

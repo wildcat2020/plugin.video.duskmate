@@ -136,6 +136,8 @@ class Script(object):
         # Library Integration
         'duskmate_setup':
             lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'setup')(**kwargs),
+        'duskmate_provision_trakt':
+            lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'provision_trakt')(**kwargs),
         'duskmate_add_to_library':
             lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'add_to_library')(**kwargs),
         'add_to_library':

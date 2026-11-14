@@ -708,7 +708,7 @@
                     <level>0</level>
                     <control type="button" format="action">
                         <close>true</close>
-                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.tmdbhelper.sync.trakt)</data>
+                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.duskmate.sync.trakt)</data>
                     </control>
                 </setting>
                 <setting id="trakt_cacheownlists" type="boolean" label="32463" help="32634">

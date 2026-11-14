@@ -2,6 +2,10 @@
 # Upstream: jurialmunkey/plugin.video.themoviedb.helper
 # License: GPL v.3 https://www.gnu.org/copyleft/gpl.html
 import json
+import time
+from base64 import urlsafe_b64decode
+from binascii import Error as Base64Error
+from hashlib import sha256
 
 from tmdbhelper.lib.addon.plugin import ADDONDATA, get_version
 from tmdbhelper.lib.script.method.decorators import get_tmdb_id, is_in_kwargs
@@ -9,8 +13,9 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '1'
+DUSKMATE_BUILD = '2'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
+TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
 
 
 def _library_paths():
@@ -61,17 +66,49 @@ def _write_state(state):
         status_file.close()
 
 
+def _trakt_sync_status():
+    try:
+        from xbmc import getCondVisibility
+        from xbmcaddon import Addon
+
+        addon = Addon(TRAKT_SYNC_ADDON)
+        authorization = json.loads(addon.getSetting('token') or '{}')
+        expires_at = int(authorization.get('created_at') or 0) + int(authorization.get('expires_in') or 0)
+    except (RuntimeError, TypeError, ValueError):
+        return {
+            'installed': False,
+            'enabled': False,
+            'authorized': False,
+            'managed': False,
+            'expires_at': 0,
+            'token_fingerprint': '',
+            'version': '',
+        }
+
+    access_token = authorization.get('access_token') or ''
+    return {
+        'installed': True,
+        'enabled': bool(getCondVisibility(f'System.HasAddon({TRAKT_SYNC_ADDON})')),
+        'authorized': bool(access_token and expires_at > int(time.time()) + 30),
+        'managed': authorization.get('managed_by') == 'duskmate',
+        'expires_at': expires_at,
+        'token_fingerprint': sha256(access_token.encode('utf-8')).hexdigest()[:16] if access_token else '',
+        'version': addon.getAddonInfo('version'),
+    }
+
+
 def get_status():
     paths = _library_paths()
     state = _read_state()
     return {
-        'schema': 1,
+        'schema': 2,
         'addon_version': get_version(),
         'upstream_version': UPSTREAM_VERSION,
         'duskmate_build': DUSKMATE_BUILD,
         'library_ready': _paths_ready(paths),
         'library_paths': paths,
         'last_add': state.get('last_add'),
+        'trakt_sync': _trakt_sync_status(),
     }
 
 
@@ -82,6 +119,21 @@ def setup(**kwargs):
     state['setup'] = {'library_ready': ready, 'library_paths': paths}
     _write_state(state)
     return ready
+
+
+def provision_trakt(authorization=None, **kwargs):
+    if not authorization:
+        raise ValueError('A Trakt authorization payload is required')
+    try:
+        payload = json.loads(urlsafe_b64decode(f'{authorization}===').decode('utf-8'))
+    except (Base64Error, TypeError, UnicodeDecodeError, ValueError) as error:
+        raise ValueError('The Trakt authorization payload is invalid') from error
+
+    from tmdbhelper_sync_trakt.provisioning import provision
+    return provision(
+        access_token=payload.get('access_token'),
+        expires_at=payload.get('expires_at'),
+    )
 
 
 class _ResultCollector:

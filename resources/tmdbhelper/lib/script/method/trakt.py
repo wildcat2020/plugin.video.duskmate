@@ -29,7 +29,7 @@ def rename_list(rename_list=None, **kwargs):
 def get_trakt_provider(install=False):
     if install:
         from tmdbhelper.lib.script.sync.provider_install import SyncProviderInstall
-        return SyncProviderInstall('script.module.tmdbhelper.sync.trakt').install()
+        return SyncProviderInstall('script.module.duskmate.sync.trakt').install()
     from tmdbhelper.lib.sync.providers.registry import SyncProviderRegistry
     return SyncProviderRegistry().find_provider('trakt')
 
@@ -42,7 +42,7 @@ def run_trakt_diagnostic(action, **kwargs):
     from tmdbhelper.lib.addon.plugin import executebuiltin
     payload = quote(dumps(kwargs), safe='')
     executebuiltin(
-        f'RunScript(script.module.tmdbhelper.sync.trakt,action={action},payload={payload})')
+        f'RunScript(script.module.duskmate.sync.trakt,action={action},payload={payload})')
 
 
 def authenticate_trakt(**kwargs):
@@ -50,11 +50,11 @@ def authenticate_trakt(**kwargs):
     if provider is None:
         return
     from tmdbhelper.lib.addon.plugin import executebuiltin
-    executebuiltin('RunScript(script.module.tmdbhelper.sync.trakt,action=authenticate)')
+    executebuiltin('RunScript(script.module.duskmate.sync.trakt,action=authenticate)')
 
 
 def revoke_trakt(**kwargs):
     if get_trakt_provider() is None:
         return
     from tmdbhelper.lib.addon.plugin import executebuiltin
-    executebuiltin('RunScript(script.module.tmdbhelper.sync.trakt,action=revoke)')
+    executebuiltin('RunScript(script.module.duskmate.sync.trakt,action=revoke)')

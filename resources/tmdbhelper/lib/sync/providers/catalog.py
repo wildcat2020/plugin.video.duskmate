@@ -1,5 +1,5 @@
 PROVIDERS = {
-    'script.module.tmdbhelper.sync.trakt': {
+    'script.module.duskmate.sync.trakt': {
         'provider_id': 'trakt',
         'display_name': 'Trakt',
         'capabilities': (
