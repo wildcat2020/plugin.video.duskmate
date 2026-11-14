@@ -3,6 +3,8 @@
 # License: GPL v.3 https://www.gnu.org/copyleft/gpl.html
 import json
 import time
+from base64 import urlsafe_b64decode
+from binascii import Error as Base64Error
 from hashlib import sha256
 
 from tmdbhelper.lib.addon.plugin import ADDONDATA, get_version
@@ -11,7 +13,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '3'
+DUSKMATE_BUILD = '4'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
 
@@ -122,10 +124,42 @@ def setup(**kwargs):
 def provision_trakt(authorization=None, **kwargs):
     if not authorization:
         raise ValueError('A Trakt authorization payload is required')
-    from xbmc import executebuiltin
-    executebuiltin(
-        f'RunScript({TRAKT_SYNC_ADDON},action=provision,authorization={authorization})'
-    )
+    try:
+        payload = json.loads(urlsafe_b64decode(f'{authorization}===').decode('utf-8'))
+    except (Base64Error, TypeError, UnicodeDecodeError, ValueError) as error:
+        raise ValueError('The Trakt authorization payload is invalid') from error
+
+    access_token = (payload.get('access_token') or '').strip()
+    now = int(time.time())
+    try:
+        expires_at = int(payload.get('expires_at'))
+    except (TypeError, ValueError) as error:
+        raise ValueError('A valid Trakt token expiry is required') from error
+    if not access_token:
+        raise ValueError('A Trakt access token is required')
+    if expires_at - now < 60:
+        raise ValueError('The Trakt access token expires too soon')
+
+    from xbmc import Window
+    from xbmcaddon import Addon
+    addon = Addon(TRAKT_SYNC_ADDON)
+    stored = json.dumps({
+        'access_token': access_token,
+        'created_at': now,
+        'expires_in': expires_at - now,
+        'managed_by': 'duskmate',
+        'scope': 'public',
+        'token_type': 'bearer',
+    }, separators=(',', ':'), sort_keys=True)
+    addon.setSetting('token', stored)
+    addon.setSetting('credentials_migrated', 'true')
+    if addon.getSetting('token') != stored:
+        raise RuntimeError('Kodi did not retain the Duskmate Trakt authorization')
+    window = Window(10000)
+    for name in (
+            'TraktUserToken', 'TraktIsAuth', 'TraktRefreshAttempts',
+            'TraktRefreshTimeStamp', 'TraktAttemptedLogin'):
+        window.clearProperty(name)
     return True
 
 
