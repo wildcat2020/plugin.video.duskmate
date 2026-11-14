@@ -13,7 +13,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '7'
+DUSKMATE_BUILD = '8'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
 CURATED_FOLDER = 'Duskmate Curated'
@@ -27,10 +27,11 @@ def _library_paths():
 
 
 def _curated_paths():
-    return {
-        key: f"{value.rstrip('/\\')}/{CURATED_FOLDER}/"
-        for key, value in _library_paths().items()
-    }
+    paths = {}
+    for key, value in _library_paths().items():
+        root = value.replace(chr(92), '/').rstrip('/')
+        paths[key] = f'{root}/{CURATED_FOLDER}/'
+    return paths
 
 
 def _paths_ready(paths, create=False):
