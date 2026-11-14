@@ -3,8 +3,6 @@
 # License: GPL v.3 https://www.gnu.org/copyleft/gpl.html
 import json
 import time
-from base64 import urlsafe_b64decode
-from binascii import Error as Base64Error
 from hashlib import sha256
 
 from tmdbhelper.lib.addon.plugin import ADDONDATA, get_version
@@ -13,7 +11,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '2'
+DUSKMATE_BUILD = '3'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
 
@@ -124,16 +122,11 @@ def setup(**kwargs):
 def provision_trakt(authorization=None, **kwargs):
     if not authorization:
         raise ValueError('A Trakt authorization payload is required')
-    try:
-        payload = json.loads(urlsafe_b64decode(f'{authorization}===').decode('utf-8'))
-    except (Base64Error, TypeError, UnicodeDecodeError, ValueError) as error:
-        raise ValueError('The Trakt authorization payload is invalid') from error
-
-    from duskmate_sync_trakt.provisioning import provision
-    return provision(
-        access_token=payload.get('access_token'),
-        expires_at=payload.get('expires_at'),
+    from xbmc import executebuiltin
+    executebuiltin(
+        f'RunScript({TRAKT_SYNC_ADDON},action=provision,authorization={authorization})'
     )
+    return True
 
 
 class _ResultCollector:
