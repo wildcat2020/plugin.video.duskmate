@@ -13,15 +13,23 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '6'
+DUSKMATE_BUILD = '7'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
+CURATED_FOLDER = 'Duskmate Curated'
 
 
 def _library_paths():
     return {
         'movies': LibraryCommon.get_basedir('movies'),
         'tvshows': LibraryCommon.get_basedir('tvshows'),
+    }
+
+
+def _curated_paths():
+    return {
+        key: f"{value.rstrip('/\\')}/{CURATED_FOLDER}/"
+        for key, value in _library_paths().items()
     }
 
 
@@ -100,6 +108,7 @@ def _trakt_sync_status():
 def get_status():
     paths = _library_paths()
     state = _read_state()
+    curated = state.get('curated', {})
     return {
         'schema': 2,
         'addon_version': get_version(),
@@ -108,6 +117,12 @@ def get_status():
         'library_ready': _paths_ready(paths),
         'library_paths': paths,
         'last_add': state.get('last_add'),
+        'curated': {
+            'generation': curated.get('generation', ''),
+            'active_count': curated.get('active_count', 0),
+            'owned_count': len(curated.get('entries', {})),
+            'removed_files': curated.get('removed_files', 0),
+        },
         'trakt_sync': _trakt_sync_status(),
     }
 
@@ -170,6 +185,11 @@ class _ResultCollector:
 
     def set_library_item(self, library_item):
         result = super().set_library_item(library_item)
+        owned_files = []
+        for writer_name in ('strm_filewriter', 'info_filewriter'):
+            writer = getattr(library_item, writer_name, None)
+            if writer and writer.success:
+                owned_files.append(writer.filename_and_path)
         self.duskmate_items.append({
             'tmdb_id': library_item.tmdb_id,
             'season': library_item.season,
@@ -177,6 +197,7 @@ class _ResultCollector:
             'status': library_item.log_status,
             'message': library_item.log_message,
             'file': library_item.file,
+            'owned_files': owned_files,
         })
         return result
 
@@ -209,11 +230,23 @@ def _summary(tmdb_type, tmdb_id, items):
     }
 
 
-def _add_movie(tmdb_id, force):
+def _add_movie(tmdb_id, force, curated=False):
     from tmdbhelper.lib.update.builder.movies import LibraryBuilderMovies
 
+    if curated:
+        from jurialmunkey.ftools import cached_property
+        from tmdbhelper.lib.update.items.movie import LibraryMovie
+
+        class DuskmateCuratedMovie(LibraryMovie):
+            @cached_property
+            def basedir(self):
+                return _curated_paths()['movies']
+
     class DuskmateMovieBuilder(_ResultCollector, LibraryBuilderMovies):
-        pass
+        if curated:
+            @cached_property
+            def library_item_class(self):
+                return DuskmateCuratedMovie
 
     with DuskmateMovieBuilder() as library:
         library.forced = force
@@ -221,11 +254,47 @@ def _add_movie(tmdb_id, force):
         return library.duskmate_items
 
 
-def _add_tvshow(tmdb_id, force):
+def _add_tvshow(tmdb_id, force, curated=False):
     from tmdbhelper.lib.update.builder.tvshows import LibraryBuilderTvshows
 
+    if curated:
+        from jurialmunkey.ftools import cached_property
+        from tmdbhelper.lib.update.items.episode import LibraryEpisode
+        from tmdbhelper.lib.update.items.season import LibrarySeason
+        from tmdbhelper.lib.update.items.tvshow import LibraryTvshow
+
+        class DuskmateCuratedEpisode(LibraryEpisode):
+            @cached_property
+            def basedir(self):
+                return _curated_paths()['tvshows']
+
+        class DuskmateCuratedSeason(LibrarySeason):
+            def get_episode(self, sync_data):
+                episode = DuskmateCuratedEpisode(self.tmdb_id)
+                episode.sync_data = self.key_getter(sync_data)
+                episode.cache = self.cache
+                episode.tvshow_id = self.tvshow_id
+                episode.folders = self.folders + episode.folders
+                return episode
+
+        class DuskmateCuratedTvshow(LibraryTvshow):
+            @cached_property
+            def basedir(self):
+                return _curated_paths()['tvshows']
+
+            def get_season(self, sync_data):
+                season = DuskmateCuratedSeason(self.tmdb_id)
+                season.sync_data = self.key_getter(sync_data)
+                season.cache = self.cache
+                season.tvshow_id = self.tvshow_id
+                season.folders = self.folders + season.folders
+                return season
+
     class DuskmateTvshowBuilder(_ResultCollector, LibraryBuilderTvshows):
-        pass
+        if curated:
+            @cached_property
+            def library_item_class(self):
+                return DuskmateCuratedTvshow
 
     with DuskmateTvshowBuilder() as library:
         library.forced = force
@@ -237,8 +306,9 @@ def _add_tvshow(tmdb_id, force):
 @get_tmdb_id
 def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
     state = _read_state()
+    curated = str(kwargs.get('curated', '')).lower() in ('1', 'true', 'yes')
     try:
-        items = _add_movie(tmdb_id, force) if tmdb_type == 'movie' else _add_tvshow(tmdb_id, force)
+        items = _add_movie(tmdb_id, force, curated) if tmdb_type == 'movie' else _add_tvshow(tmdb_id, force, curated)
         result = _summary(tmdb_type, tmdb_id, items)
     except Exception as error:
         result = {
@@ -254,5 +324,89 @@ def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
         _write_state(state)
         raise
     state['last_add'] = result
+    if curated:
+        curated_state = state.setdefault('curated', {'generation': '', 'entries': {}})
+        key = f'{tmdb_type}:{int(tmdb_id)}'
+        previous = curated_state.setdefault('entries', {}).get(key, {})
+        owned_files = sorted({
+            filename
+            for item in items
+            for filename in item.get('owned_files', [])
+            if filename
+        })
+        curated_state['entries'][key] = {
+            'tmdb_type': tmdb_type,
+            'tmdb_id': int(tmdb_id),
+            'generation': str(kwargs.get('generation') or curated_state.get('generation') or ''),
+            'retained': bool(previous.get('retained')),
+            'files': sorted(set(previous.get('files', [])) | set(owned_files)),
+        }
+        pending_keys = curated_state.setdefault('pending_keys', [])
+        if key not in pending_keys:
+            pending_keys.append(key)
     _write_state(state)
     return result
+
+
+def curated_begin(generation=None, **kwargs):
+    if not generation:
+        raise ValueError('A curated generation is required')
+    state = _read_state()
+    curated = state.setdefault('curated', {'entries': {}})
+    curated['pending_generation'] = str(generation)
+    curated['pending_keys'] = []
+    _write_state(state)
+    return True
+
+
+def curated_touch(tmdb_type=None, tmdb_id=None, generation=None, retain=False, **kwargs):
+    if tmdb_type not in ('movie', 'tv') or not tmdb_id:
+        raise ValueError('A movie or TV TMDB id is required')
+    state = _read_state()
+    curated = state.setdefault('curated', {'entries': {}})
+    key = f'{tmdb_type}:{int(tmdb_id)}'
+    keys = curated.setdefault('pending_keys', [])
+    if key not in keys:
+        keys.append(key)
+    entry = curated.setdefault('entries', {}).get(key)
+    if entry:
+        entry['generation'] = str(generation or curated.get('pending_generation') or '')
+        if str(retain).lower() in ('1', 'true', 'yes'):
+            entry['retained'] = True
+    _write_state(state)
+    return True
+
+
+def _safe_curated_file(filename):
+    from xbmcvfs import translatePath
+    translated = translatePath(filename).replace('\\', '/').lower()
+    return any(
+        translated.startswith(translatePath(path).replace('\\', '/').lower())
+        for path in _curated_paths().values()
+    )
+
+
+def curated_commit(generation=None, **kwargs):
+    from xbmcvfs import delete, exists
+    state = _read_state()
+    curated = state.setdefault('curated', {'entries': {}})
+    expected = str(generation or '')
+    if not expected or expected != str(curated.get('pending_generation') or ''):
+        raise ValueError('The curated generation does not match the pending update')
+    active = set(curated.get('pending_keys', []))
+    entries = curated.setdefault('entries', {})
+    removed = 0
+    for key, entry in list(entries.items()):
+        if key in active or entry.get('retained'):
+            continue
+        for filename in entry.get('files', []):
+            if _safe_curated_file(filename) and exists(filename) and delete(filename):
+                removed += 1
+        del entries[key]
+    curated['generation'] = expected
+    curated.pop('pending_generation', None)
+    curated.pop('pending_keys', None)
+    curated['active_count'] = len(active)
+    curated['removed_files'] = removed
+    _write_state(state)
+    return True

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addon id="plugin.video.duskmate"
-       version="6.21.5.11"
+       version="6.21.5.12"
 name="Duskmate"
 provider-name="jurialmunkey / Duskmate">
 <requires>
