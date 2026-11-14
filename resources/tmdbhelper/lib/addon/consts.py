@@ -107,6 +107,9 @@ ROUTE_NOID = {
     'duskmate_status': {'route': {
         'module_name': 'tmdbhelper.lib.duskmate.status',
         'import_attr': 'DuskmateStatusDirectory'}},
+    'duskmate_provision_trakt': {'route': {
+        'module_name': 'tmdbhelper.lib.duskmate.status',
+        'import_attr': 'DuskmateProvisionTraktDirectory'}},
     'dir_search': {'route': {
         'module_name': 'tmdbhelper.lib.items.directories.tmdb.lists_search',
         'import_attr': 'ListSearchDir'}},

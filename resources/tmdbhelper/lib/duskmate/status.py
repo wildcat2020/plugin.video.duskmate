@@ -4,7 +4,7 @@
 import json
 from urllib.parse import quote
 
-from tmdbhelper.lib.duskmate.integration import get_status, setup
+from tmdbhelper.lib.duskmate.integration import get_status, provision_trakt, setup
 
 
 class DuskmateStatusDirectory:
@@ -31,4 +31,14 @@ class DuskmateStatusDirectory:
 class DuskmateSetupDirectory(DuskmateStatusDirectory):
     def get_directory(self, items_only=False, build_items=True):
         setup()
+        return super().get_directory(items_only=items_only, build_items=build_items)
+
+
+class DuskmateProvisionTraktDirectory(DuskmateStatusDirectory):
+    def __init__(self, handle, paramstring, authorization=None, **kwargs):
+        super().__init__(handle, paramstring, **kwargs)
+        self.authorization = authorization
+
+    def get_directory(self, items_only=False, build_items=True):
+        provision_trakt(self.authorization)
         return super().get_directory(items_only=items_only, build_items=build_items)
