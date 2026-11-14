@@ -129,7 +129,7 @@ def provision_trakt(authorization=None, **kwargs):
     except (Base64Error, TypeError, UnicodeDecodeError, ValueError) as error:
         raise ValueError('The Trakt authorization payload is invalid') from error
 
-    from tmdbhelper_sync_trakt.provisioning import provision
+    from duskmate_sync_trakt.provisioning import provision
     return provision(
         access_token=payload.get('access_token'),
         expires_at=payload.get('expires_at'),

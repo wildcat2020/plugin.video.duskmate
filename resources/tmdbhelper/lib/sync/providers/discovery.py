@@ -3,7 +3,7 @@ from tmdbhelper.lib.api.kodi.rpc import get_jsonrpc
 
 
 class SyncProviderDiscovery:
-    addon_prefix = 'script.module.tmdbhelper.sync.'
+    addon_prefix = 'script.module.duskmate.sync.'
 
     @cached_property
     def addons(self):
