@@ -13,7 +13,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '5'
+DUSKMATE_BUILD = '6'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
 
@@ -140,8 +140,8 @@ def provision_trakt(authorization=None, **kwargs):
     if expires_at - now < 60:
         raise ValueError('The Trakt access token expires too soon')
 
-    from xbmc import Window
     from xbmcaddon import Addon
+    from xbmcgui import Window
     addon = Addon(TRAKT_SYNC_ADDON)
     stored = json.dumps({
         'access_token': access_token,
