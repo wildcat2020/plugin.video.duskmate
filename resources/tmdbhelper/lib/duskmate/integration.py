@@ -16,7 +16,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '16'
+DUSKMATE_BUILD = '18'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
@@ -328,12 +328,15 @@ def _trakt_sync_status():
         addon = Addon(TRAKT_SYNC_ADDON)
         authorization = json.loads(addon.getSetting('token') or '{}')
         expires_at = int(authorization.get('created_at') or 0) + int(authorization.get('expires_in') or 0)
+        from tmdbhelper.lib.sync.providers.scrobbling_settings import ScrobblingProviderSetting
+        scrobbling = 'trakt' in ScrobblingProviderSetting('scrobbling').provider_ids
     except (RuntimeError, TypeError, ValueError):
         return {
             'installed': False,
             'enabled': False,
             'authorized': False,
             'managed': False,
+            'scrobbling': False,
             'expires_at': 0,
             'token_fingerprint': '',
             'version': '',
@@ -345,6 +348,7 @@ def _trakt_sync_status():
         'enabled': bool(getCondVisibility(f'System.HasAddon({TRAKT_SYNC_ADDON})')),
         'authorized': bool(access_token and expires_at > int(time.time()) + 30),
         'managed': authorization.get('managed_by') == 'duskmate',
+        'scrobbling': scrobbling,
         'expires_at': expires_at,
         'token_fingerprint': sha256(access_token.encode('utf-8')).hexdigest()[:16] if access_token else '',
         'version': addon.getAddonInfo('version'),
@@ -446,6 +450,14 @@ def provision_trakt(authorization=None, **kwargs):
     addon.setSetting('credentials_migrated', 'true')
     if addon.getSetting('token') != stored:
         raise RuntimeError('Kodi did not retain the Duskmate Trakt authorization')
+    # Authorizing Duskmate's managed provider is explicit consent to record Kodi playback in that
+    # Trakt account. Select only the scrobbling capability; preserve the viewer's choices for
+    # watched indicators, lists, collection, ratings and every other provider feature.
+    from tmdbhelper.lib.sync.providers.scrobbling_settings import ScrobblingProviderSetting
+    scrobbling = ScrobblingProviderSetting('scrobbling')
+    scrobbling.add_provider('trakt')
+    if 'trakt' not in scrobbling.provider_ids:
+        raise RuntimeError('Kodi did not enable Trakt scrobbling')
     window = Window(10000)
     for name in (
             'TraktUserToken', 'TraktIsAuth', 'TraktRefreshAttempts',
@@ -530,7 +542,24 @@ def _add_movie(tmdb_id, force, curated=False):
         return library.duskmate_items
 
 
-def _add_tvshow(tmdb_id, force, curated=False):
+def _scan_library_when_idle(path, timeout=600):
+    """Serialize silent targeted scans; Kodi ignores or duplicates overlapping scan requests."""
+    from xbmc import executeJSONRPC, getCondVisibility, sleep
+    deadline = time.time() + timeout
+    while getCondVisibility('Library.IsScanningVideo'):
+        if time.time() >= deadline:
+            return False
+        sleep(500)
+    executeJSONRPC(json.dumps({
+        'jsonrpc': '2.0',
+        'id': 'duskmate-priority-scan',
+        'method': 'VideoLibrary.Scan',
+        'params': {'directory': path, 'showdialogs': False},
+    }))
+    return True
+
+
+def _add_tvshow(tmdb_id, force, curated=False, priority_season=0, priority_episode=0):
     from tmdbhelper.lib.update.builder.tvshows import LibraryBuilderTvshows
 
     if curated:
@@ -572,10 +601,47 @@ def _add_tvshow(tmdb_id, force, curated=False):
             def library_item_class(self):
                 return DuskmateCuratedTvshow
 
+        def add_library_item_seasons(self, tvshow):
+            # For an episode explicitly selected in Duskmate, write that STRM first and start a
+            # scoped scan immediately. Continue through the complete series afterwards, skipping
+            # only the item already written. This preserves full-series imports without making the
+            # viewer wait for hundreds of unrelated episodes before Play using Kodi is available.
+            priority = None
+            if not curated and priority_season > 0 and priority_episode > 0:
+                for season_item in tvshow.seasons:
+                    if season_item.season != priority_season:
+                        continue
+                    priority = next(
+                        (item for item in season_item.episodes if item.episode == priority_episode),
+                        None,
+                    )
+                    break
+            if priority is not None:
+                self.set_library_item(priority)
+                _scan_library_when_idle(_library_paths()['tvshows'])
+
+            from tmdbhelper.lib.addon.plugin import get_localized
+            total = len(tvshow.seasons)
+            for count, season_item in enumerate(tvshow.seasons):
+                message = f'{get_localized(32167)} {tvshow.name} - {get_localized(20373)} {season_item.season}...'
+                self.dialog_msg(count, total, message=message)
+                episodes = season_item.episodes
+                episode_total = len(episodes)
+                for episode_count, episode_item in enumerate(episodes, 1):
+                    if (priority is not None and episode_item.season == priority_season
+                            and episode_item.episode == priority_episode):
+                        continue
+                    self.set_library_item(episode_item)
+                    self.dialog_msg(episode_count, episode_total)
+
     with DuskmateTvshowBuilder() as library:
         library.forced = force
         library.create(tmdb_id=tmdb_id)
-        return library.duskmate_items
+        items = library.duskmate_items
+    if not curated and priority_season > 0 and priority_episode > 0:
+        # Queue one final pass after the priority scan instead of overlapping scans per batch.
+        _scan_library_when_idle(_library_paths()['tvshows'])
+    return items
 
 
 @is_in_kwargs({'tmdb_type': ['movie', 'tv']})
@@ -614,8 +680,19 @@ def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
             _write_state(state)
             return result
     try:
-        items = _add_movie(tmdb_id, force, curated) if tmdb_type == 'movie' else _add_tvshow(tmdb_id, force, curated)
+        priority_season = int(kwargs.get('season') or 0)
+        priority_episode = int(kwargs.get('episode') or 0)
+        items = _add_movie(tmdb_id, force, curated) if tmdb_type == 'movie' else _add_tvshow(
+            tmdb_id,
+            force,
+            curated,
+            priority_season=priority_season,
+            priority_episode=priority_episode,
+        )
         result = _summary(tmdb_type, tmdb_id, items)
+        result['scan_managed'] = bool(
+            tmdb_type == 'tv' and priority_season > 0 and priority_episode > 0 and not curated
+        )
     except Exception as error:
         result = {
             'tmdb_type': tmdb_type,
