@@ -16,7 +16,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '11'
+DUSKMATE_BUILD = '12'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
