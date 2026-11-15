@@ -16,7 +16,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '14'
+DUSKMATE_BUILD = '15'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
@@ -173,27 +173,31 @@ def _video_database_file():
     return os.path.join(translatePath(database_dir), max(candidates)[1])
 
 
-def _content_bindings(paths):
-    """Read Kodi's own content bindings without ever modifying its database."""
+def _video_content_rows():
+    """Read Kodi's content roots without modifying its video database."""
     try:
         import sqlite3
     except ImportError:
-        return {'movies': False, 'tvshows': False}
-    bindings = {'movies': False, 'tvshows': False}
+        return []
     database = _video_database_file()
     if not database:
-        return bindings
+        return []
     try:
         connection = sqlite3.connect(f'file:{database}?mode=ro', uri=True, timeout=1)
         try:
-            rows = connection.execute(
+            return connection.execute(
                 "SELECT strPath, strContent FROM path WHERE strContent IN ('movies', 'tvshows')"
             ).fetchall()
         finally:
             connection.close()
     except (OSError, sqlite3.Error):
-        return bindings
+        return []
 
+
+def _content_bindings(paths):
+    """Read Kodi's own content bindings without ever modifying its database."""
+    bindings = {'movies': False, 'tvshows': False}
+    rows = _video_content_rows()
     from xbmcvfs import translatePath
     for key, path in paths.items():
         candidates = (path, translatePath(path))
@@ -202,6 +206,61 @@ def _content_bindings(paths):
             for row_path, content in rows
         )
     return bindings
+
+
+def _adopt_existing_content_roots(paths):
+    """Place helper output below the user's existing Kodi movie/TV content roots.
+
+    Kodi exposes no supported JSON-RPC method for assigning scraper content to a source. Reusing
+    an existing content-bound root avoids direct database writes, overlapping sources and visible
+    UI automation. Generic helper additions and Duskmate's curated mirror remain isolated below a
+    dedicated Duskmate directory inside each corresponding Kodi library.
+    """
+    from xbmcaddon import Addon
+    from xbmcvfs import File, exists
+
+    if not exists(SOURCES_FILE):
+        return paths
+    source_file = File(SOURCES_FILE)
+    try:
+        root = ElementTree.fromstring(source_file.read() or '<sources/>')
+    except (ElementTree.ParseError, TypeError, ValueError):
+        return paths
+    finally:
+        source_file.close()
+
+    external_sources = []
+    for source in root.findall('./video/source'):
+        name = (source.findtext('name') or '').strip()
+        if name in LIBRARY_SOURCES.values():
+            continue
+        external_sources.extend(
+            node.text for node in source.findall('./path') if node.text
+        )
+
+    rows = _video_content_rows()
+    addon = Addon()
+    suffixes = {'movies': 'Movies', 'tvshows': 'TV Shows'}
+    adopted = dict(paths)
+    for key, current in paths.items():
+        if any(
+            content == key and _path_covers(row_path, current)
+            for row_path, content in rows
+        ):
+            continue
+        candidates = {
+            row_path
+            for row_path, content in rows
+            if content == key
+            and any(_path_covers(source_path, row_path) for source_path in external_sources)
+        }
+        if not candidates:
+            continue
+        root_path = min(candidates, key=lambda value: (len(_normalise_path(value)), _normalise_path(value)))
+        basedir = f"{root_path.replace(chr(92), '/').rstrip('/')}/Duskmate/{suffixes[key]}/"
+        addon.setSetting(f'{key}_library', basedir)
+        adopted[key] = basedir
+    return adopted
 
 
 def _read_state():
@@ -302,6 +361,8 @@ def get_status():
 
 def setup(**kwargs):
     paths = _library_paths()
+    if not all(_content_bindings(paths).values()):
+        paths = _adopt_existing_content_roots(paths)
     paths_ready = _paths_ready(paths, create=True)
     sources_ready = _ensure_video_sources(paths) if paths_ready else False
     bindings = _content_bindings(paths)
