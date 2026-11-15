@@ -313,6 +313,12 @@ class ContainerDirectoryCommon(CommonContainerAPIs):
         with TimerList(self.timer_lists, 'total', logging=self.log_timers):
             self.prepare_item_details()
 
+            # Kodi owns the plugin handle only while this directory request is active.
+            # A widget can cancel a slow request while get_directory_items() is waiting
+            # on network/database work. Kodi 21 then native-crashes if setProperty() is
+            # called with that stale handle. Publish these properties before slow work.
+            self.property_params.update(self.set_params_to_container())
+
             items = self.get_directory_items()
 
             if not items:
@@ -321,7 +327,6 @@ class ContainerDirectoryCommon(CommonContainerAPIs):
             if not build_items:
                 return items
 
-            self.property_params.update(self.set_params_to_container())
             self.plugin_category = self.params.get('plugin_category') or self.plugin_category
 
             with TimerList(self.timer_lists, 'add_items', logging=self.log_timers):
