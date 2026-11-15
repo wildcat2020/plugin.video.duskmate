@@ -16,7 +16,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '13'
+DUSKMATE_BUILD = '14'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
@@ -64,12 +64,20 @@ def _normalise_path(path):
     return (path or '').replace(chr(92), '/').rstrip('/').lower()
 
 
-def _ensure_video_sources(paths):
-    """Add the two Duskmate folders to Kodi's ordinary video-source file.
+def _path_covers(source, target):
+    """Return True when a Kodi source is the target path or one of its parents."""
+    source = _normalise_path(source)
+    target = _normalise_path(target)
+    return bool(source and target and (target == source or target.startswith(f'{source}/')))
 
-    Kodi 21 has no JSON-RPC method for adding a source or assigning its content.  Writing the
-    documented sources.xml entry is safe and leaves the content decision to Kodi's own native
-    Set content dialog, which the Duskmate installation wizard opens immediately afterwards.
+
+def _ensure_video_sources(paths):
+    """Ensure each helper library path is covered by one ordinary Kodi video source.
+
+    An existing user source may point at the exact helper directory or at one of its parents. In
+    either case it already covers the helper library and must be reused. This prevents overlapping
+    “Duskmate Movies” / “Duskmate TV Shows” sources and duplicate Kodi indexing. A managed source
+    is created only when no existing source covers that helper path.
     """
     from xbmcvfs import File, exists, mkdirs, translatePath
 
@@ -96,17 +104,32 @@ def _ensure_video_sources(paths):
     if video is None:
         video = ElementTree.SubElement(root, 'video')
 
-    existing = {
-        _normalise_path(path_node.text)
-        for path_node in video.findall('./source/path')
-        if path_node.text
-    }
     changed = False
     for key, path in paths.items():
-        if _normalise_path(path) in existing:
+        managed_name = LIBRARY_SOURCES[key]
+        sources = list(video.findall('./source'))
+        external_cover = any(
+            (source.findtext('name') or '') != managed_name
+            and any(_path_covers(node.text, path) for node in source.findall('./path') if node.text)
+            for source in sources
+        )
+        if external_cover:
+            # Clean up an older Duskmate source only when another user/source entry already covers
+            # the same helper library. Never remove the sole route to a library path.
+            for source in sources:
+                if (source.findtext('name') or '') == managed_name:
+                    video.remove(source)
+                    changed = True
+            continue
+        if any(
+            _path_covers(node.text, path)
+            for source in sources
+            for node in source.findall('./path')
+            if node.text
+        ):
             continue
         source = ElementTree.SubElement(video, 'source')
-        ElementTree.SubElement(source, 'name').text = LIBRARY_SOURCES[key]
+        ElementTree.SubElement(source, 'name').text = managed_name
         path_node = ElementTree.SubElement(source, 'path', {'pathversion': '1'})
         path_node.text = path
         ElementTree.SubElement(source, 'allowsharing').text = 'true'
@@ -128,12 +151,12 @@ def _ensure_video_sources(paths):
         return False
     finally:
         source_file.close()
-    persisted_paths = {
-        _normalise_path(node.text)
+    persisted_paths = [
+        node.text
         for node in persisted.findall('./video/source/path')
         if node.text
-    }
-    return all(_normalise_path(path) in persisted_paths for path in paths.values())
+    ]
+    return all(any(_path_covers(source, path) for source in persisted_paths) for path in paths.values())
 
 
 def _video_database_file():
@@ -173,9 +196,9 @@ def _content_bindings(paths):
 
     from xbmcvfs import translatePath
     for key, path in paths.items():
-        candidates = {_normalise_path(path), _normalise_path(translatePath(path))}
+        candidates = (path, translatePath(path))
         bindings[key] = any(
-            content == key and _normalise_path(row_path) in candidates
+            content == key and any(_path_covers(row_path, candidate) for candidate in candidates)
             for row_path, content in rows
         )
     return bindings
