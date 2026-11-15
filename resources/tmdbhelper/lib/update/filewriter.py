@@ -55,6 +55,11 @@ class FileWriter:
     def filename_and_path(self):
         return f'{self.filepath}/{self.filename}'
 
+    @cached_property
+    def file_exists(self):
+        from xbmcvfs import exists
+        return bool(self.filename and self.filepath and exists(self.filename_and_path))
+
     ERROR_FILENAME = 1
     ERROR_FILEPATH = 2
     ERROR_CONTENTS = 3
@@ -75,6 +80,11 @@ class FileWriter:
     @cached_property
     def success(self):
         if not self.error:
+            # Library publication is idempotent. Kodi's database may not contain a newly written
+            # STRM until its next scan, but the file itself is already authoritative and must not
+            # be rewritten during another sync in that gap.
+            if self.file_exists:
+                return True
             write_to_file(self.contents, self.filepath, self.filename, join_addon_data=False)
             return True
         return False

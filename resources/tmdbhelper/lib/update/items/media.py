@@ -200,6 +200,8 @@ class LibraryMedia:
             return self.LOG_STATUS_LIBRARY
         if self.is_future_premiere:
             return self.LOG_STATUS_UNAIRED
+        if self.strm_filewriter and self.strm_filewriter.file_exists:
+            return self.LOG_STATUS_LIBRARY
         if self.strm_filewriter and not self.strm_filewriter.success:
             if self.strm_filewriter.error == self.strm_filewriter.ERROR_FILENAME:
                 return self.LOG_STATUS_NO_FILE

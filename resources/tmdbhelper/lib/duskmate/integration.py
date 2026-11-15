@@ -16,7 +16,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '12'
+DUSKMATE_BUILD = '13'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
@@ -241,6 +241,12 @@ def get_status():
     bindings = _content_bindings(paths)
     state = _read_state()
     curated = state.get('curated', {})
+    pending_owner = int(curated.get('pending_owner_pid') or 0)
+    pending_started = int(curated.get('pending_started_at') or 0)
+    pending_is_live = (
+        pending_owner == os.getpid()
+        and pending_started > int(time.time()) - (6 * 60 * 60)
+    )
     return {
         'schema': 3,
         'addon_version': get_version(),
@@ -260,6 +266,9 @@ def get_status():
         'last_add': state.get('last_add'),
         'curated': {
             'generation': curated.get('generation', ''),
+            # A pending generation is live only while it belongs to this Kodi process. If Kodi
+            # was restarted after an interrupted mirror, the Android client may safely retry it.
+            'pending_generation': curated.get('pending_generation', '') if pending_is_live else '',
             'active_count': curated.get('active_count', 0),
             'owned_count': len(curated.get('entries', {})),
             'removed_files': curated.get('removed_files', 0),
@@ -456,6 +465,36 @@ def _add_tvshow(tmdb_id, force, curated=False):
 def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
     state = _read_state()
     curated = str(kwargs.get('curated', '')).lower() in ('1', 'true', 'yes')
+    key = f'{tmdb_type}:{int(tmdb_id)}'
+    if curated:
+        from xbmcvfs import exists
+        curated_state = state.setdefault('curated', {'generation': '', 'entries': {}})
+        previous = curated_state.setdefault('entries', {}).get(key, {})
+        owned_files = [filename for filename in previous.get('files', []) if filename]
+        # A completed managed entry is the strongest possible duplicate check: it works before
+        # Kodi has scanned the files into its database and avoids fetching every season again.
+        if owned_files and all(exists(filename) for filename in owned_files):
+            generation = str(kwargs.get('generation') or curated_state.get('generation') or '')
+            previous['generation'] = generation
+            pending_keys = curated_state.setdefault('pending_keys', [])
+            if key not in pending_keys:
+                pending_keys.append(key)
+            result = {
+                'tmdb_type': tmdb_type,
+                'tmdb_id': int(tmdb_id),
+                'outcome': 'already_present',
+                'counts': {
+                    'added': 0,
+                    'already_present': len(owned_files),
+                    'skipped': 0,
+                    'failed': 0,
+                },
+                'item_count': len(owned_files),
+                'failures': [],
+            }
+            state['last_add'] = result
+            _write_state(state)
+            return result
     try:
         items = _add_movie(tmdb_id, force, curated) if tmdb_type == 'movie' else _add_tvshow(tmdb_id, force, curated)
         result = _summary(tmdb_type, tmdb_id, items)
@@ -475,7 +514,6 @@ def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
     state['last_add'] = result
     if curated:
         curated_state = state.setdefault('curated', {'generation': '', 'entries': {}})
-        key = f'{tmdb_type}:{int(tmdb_id)}'
         previous = curated_state.setdefault('entries', {}).get(key, {})
         owned_files = sorted({
             filename
@@ -502,8 +540,18 @@ def curated_begin(generation=None, **kwargs):
         raise ValueError('A curated generation is required')
     state = _read_state()
     curated = state.setdefault('curated', {'entries': {}})
+    now = int(time.time())
+    pending_owner = int(curated.get('pending_owner_pid') or 0)
+    pending_started = int(curated.get('pending_started_at') or 0)
+    if (
+            curated.get('pending_generation')
+            and pending_owner == os.getpid()
+            and pending_started > now - (6 * 60 * 60)):
+        raise RuntimeError('A Duskmate curated-library mirror is already running')
     curated['pending_generation'] = str(generation)
     curated['pending_keys'] = []
+    curated['pending_owner_pid'] = os.getpid()
+    curated['pending_started_at'] = now
     _write_state(state)
     return True
 
@@ -555,6 +603,8 @@ def curated_commit(generation=None, **kwargs):
     curated['generation'] = expected
     curated.pop('pending_generation', None)
     curated.pop('pending_keys', None)
+    curated.pop('pending_owner_pid', None)
+    curated.pop('pending_started_at', None)
     curated['active_count'] = len(active)
     curated['removed_files'] = removed
     _write_state(state)
