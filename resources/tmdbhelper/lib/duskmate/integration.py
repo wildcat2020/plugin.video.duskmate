@@ -16,7 +16,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '15'
+DUSKMATE_BUILD = '16'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
@@ -208,59 +208,93 @@ def _content_bindings(paths):
     return bindings
 
 
-def _adopt_existing_content_roots(paths):
-    """Place helper output below the user's existing Kodi movie/TV content roots.
+def _ensure_content_bindings(paths):
+    """Bind the helper's *effective* roots as Kodi movie/TV sources.
 
-    Kodi exposes no supported JSON-RPC method for assigning scraper content to a source. Reusing
-    an existing content-bound root avoids direct database writes, overlapping sources and visible
-    UI automation. Generic helper additions and Duskmate's curated mirror remain isolated below a
-    dedicated Duskmate directory inside each corresponding Kodi library.
+    Kodi exposes no JSON-RPC method for assigning content to a video source. The helper therefore
+    performs the same narrowly scoped database update as Kodi's Set content dialog: only the two
+    paths currently selected in the helper settings are touched. Existing parent bindings are
+    reused, and no unrelated source, scraper setting, or library row is changed.
+
+    ``metadata.local`` ships with Kodi and is the correct scraper here because TMDB Helper writes
+    the NFO files consumed by the library scan. Schema checks keep this fail-closed on an unknown
+    Kodi database instead of making a speculative write.
     """
-    from xbmcaddon import Addon
-    from xbmcvfs import File, exists
+    bindings = _content_bindings(paths)
+    if all(bindings.values()):
+        return bindings
 
-    if not exists(SOURCES_FILE):
-        return paths
-    source_file = File(SOURCES_FILE)
     try:
-        root = ElementTree.fromstring(source_file.read() or '<sources/>')
-    except (ElementTree.ParseError, TypeError, ValueError):
-        return paths
-    finally:
-        source_file.close()
+        import sqlite3
+    except ImportError:
+        return bindings
+    database = _video_database_file()
+    if not database:
+        return bindings
 
-    external_sources = []
-    for source in root.findall('./video/source'):
-        name = (source.findtext('name') or '').strip()
-        if name in LIBRARY_SOURCES.values():
-            continue
-        external_sources.extend(
-            node.text for node in source.findall('./path') if node.text
-        )
+    from xbmcvfs import translatePath
+    try:
+        connection = sqlite3.connect(database, timeout=5)
+        try:
+            connection.execute('PRAGMA busy_timeout=5000')
+            columns = {
+                row[1]: row
+                for row in connection.execute('PRAGMA table_info(path)').fetchall()
+            }
+            required = {'idPath', 'strPath', 'strContent', 'strScraper'}
+            if not required.issubset(columns):
+                return bindings
 
-    rows = _video_content_rows()
-    addon = Addon()
-    suffixes = {'movies': 'Movies', 'tvshows': 'TV Shows'}
-    adopted = dict(paths)
-    for key, current in paths.items():
-        if any(
-            content == key and _path_covers(row_path, current)
-            for row_path, content in rows
-        ):
-            continue
-        candidates = {
-            row_path
-            for row_path, content in rows
-            if content == key
-            and any(_path_covers(source_path, row_path) for source_path in external_sources)
-        }
-        if not candidates:
-            continue
-        root_path = min(candidates, key=lambda value: (len(_normalise_path(value)), _normalise_path(value)))
-        basedir = f"{root_path.replace(chr(92), '/').rstrip('/')}/Duskmate/{suffixes[key]}/"
-        addon.setSetting(f'{key}_library', basedir)
-        adopted[key] = basedir
-    return adopted
+            rows = connection.execute('SELECT idPath, strPath, strContent FROM path').fetchall()
+            connection.execute('BEGIN IMMEDIATE')
+            for key, configured_path in paths.items():
+                if bindings[key]:
+                    continue
+                configured_path = configured_path.replace(chr(92), '/').rstrip('/') + '/'
+                translated_path = translatePath(configured_path).replace(chr(92), '/').rstrip('/') + '/'
+                candidates = (configured_path, translated_path)
+
+                # Prefer an existing exact row in either Kodi or translated form. Only create a
+                # row when Kodi has never seen this precise helper root.
+                exact = next((row for row in rows if any(
+                    _normalise_path(row[1]) == _normalise_path(candidate)
+                    for candidate in candidates
+                )), None)
+                values = {
+                    'strContent': key,
+                    'strScraper': 'metadata.local',
+                    'scanRecursive': 0,
+                    'useFolderNames': 1,
+                    'strSettings': '',
+                    'noUpdate': 0,
+                    'exclude': 0,
+                    'allAudio': 0,
+                }
+                values = {name: value for name, value in values.items() if name in columns}
+                if exact:
+                    assignments = ', '.join(f'{name}=?' for name in values)
+                    connection.execute(
+                        f'UPDATE path SET {assignments} WHERE idPath=?',
+                        (*values.values(), exact[0]),
+                    )
+                else:
+                    insert_values = {'strPath': configured_path, **values}
+                    names = ', '.join(insert_values)
+                    placeholders = ', '.join('?' for _ in insert_values)
+                    connection.execute(
+                        f'INSERT INTO path ({names}) VALUES ({placeholders})',
+                        tuple(insert_values.values()),
+                    )
+                    rows.append((connection.execute('SELECT last_insert_rowid()').fetchone()[0], configured_path, key))
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+    except (OSError, sqlite3.Error):
+        return bindings
+    return _content_bindings(paths)
 
 
 def _read_state():
@@ -360,12 +394,12 @@ def get_status():
 
 
 def setup(**kwargs):
+    # Read the helper's effective settings after installation. These may be its vanilla defaults
+    # or paths the user redirected earlier; Duskmate must never replace either choice.
     paths = _library_paths()
-    if not all(_content_bindings(paths).values()):
-        paths = _adopt_existing_content_roots(paths)
     paths_ready = _paths_ready(paths, create=True)
     sources_ready = _ensure_video_sources(paths) if paths_ready else False
-    bindings = _content_bindings(paths)
+    bindings = _ensure_content_bindings(paths) if sources_ready else _content_bindings(paths)
     ready = paths_ready and sources_ready and all(bindings.values())
     state = _read_state()
     state['setup'] = {
