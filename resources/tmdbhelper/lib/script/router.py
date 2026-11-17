@@ -146,6 +146,8 @@ class Script(object):
             lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'curated_touch')(**kwargs),
         'duskmate_curated_commit':
             lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'curated_commit')(**kwargs),
+        'duskmate_curated_abort':
+            lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'curated_abort')(**kwargs),
         'add_to_library':
             lambda **kwargs: importmodule('tmdbhelper.lib.script.method.library', 'add_to_library')(**kwargs),
         'user_list':

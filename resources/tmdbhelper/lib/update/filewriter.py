@@ -47,8 +47,17 @@ class FileWriter:
 
     @cached_property
     def filepath(self):
+        # TMDb/network failures can leave an item without a title. The upstream folder model then
+        # contains ``None`` (for example ``[None]`` for a movie). Treat that as a normal invalid
+        # path so LibraryMedia reports LOG_STATUS_NO_PATH; never let unicodedata.normalize raise
+        # and tear down a whole Duskmate transaction.
+        if not self.folders or not isinstance(self.folders[0], str) or not self.folders[0]:
+            return ''
+        intermediate = self.folders[1:-1]
+        if any(not isinstance(folder, str) or not folder for folder in intermediate):
+            return ''
         filepath = [self.folders[0].replace('\\', '/')]  # First folder is basedir, just convert DOS to UNIX style paths
-        filepath = filepath + [validify_filename(f) for f in self.folders[1:-1]]
+        filepath = filepath + [validify_filename(f) for f in intermediate]
         return '/'.join(filepath)
 
     @cached_property

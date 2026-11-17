@@ -18,24 +18,29 @@ if __name__ == '__main__':
         'duskmate_curated_begin',
         'duskmate_curated_touch',
         'duskmate_curated_commit',
+        'duskmate_curated_abort',
     }
 
     if action in script_actions:
         # Addons.ExecuteAddon targets the plug-in extension when an add-on also exposes a
-        # script extension. Route Duskmate's non-UI jobs explicitly so they never acquire or
-        # mutate a Kodi directory handle. Kodi 21 on 32-bit ARM can native-crash when a slow
-        # background job later calls xbmcplugin.setProperty() on an expired directory handle.
-        from tmdbhelper.lib.script.router import Script
+        # script extension. Never run a slow library job while this directory handle is open:
+        # Kodi 21 on 32-bit ARM can abort when Android pauses Kodi during that work. Hand the
+        # job to the add-on's script entry point and close the directory immediately.
+        import xbmc
+        from xbmcplugin import endOfDirectory
         args = [action]
         args.extend(
             f'{key}={value}'
             for key, value in pairs
             if key != 'info' and key != bare_action
         )
-        Script(*args).router()
         if handle >= 0:
-            from xbmcplugin import endOfDirectory
             endOfDirectory(handle, succeeded=True, cacheToDisc=False)
+        xbmc.executebuiltin(
+            'RunScript(plugin.video.duskmate,{})'.format(
+                ','.join(args)
+            )
+        )
     else:
         from tmdbhelper.lib.items.router import Router
         Router(handle, query).run()

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addon id="plugin.video.duskmate"
-        version="6.21.5.23"
+        version="6.21.5.28"
 name="Duskmate"
 provider-name="jurialmunkey / Duskmate">
 <requires>
@@ -12,10 +12,10 @@ provider-name="jurialmunkey / Duskmate">
   <import addon="script.module.infotagger" version="0.1.0" />
   <import addon="script.module.qrcode" version="6.1.0" />
 </requires>
+<extension point="xbmc.python.script" library="resources/script.py" />
 <extension point="xbmc.python.pluginsource" library="resources/plugin.py">
   <provides>video</provides>
 </extension>
-<extension point="xbmc.python.script" library="resources/script.py" />
 <extension point="xbmc.service" library="resources/service.py" />
 <extension point="xbmc.python.module" library="resources/modules"/>
 <extension point="xbmc.addon.metadata">
@@ -42,7 +42,7 @@ provider-name="jurialmunkey / Duskmate">
   <source>https://github.com/wildcat2020/plugin.video.duskmate</source>
   <forum>https://forum.kodi.tv/showthread.php?tid=345847</forum>
   <assets>
-    <icon>icon.png</icon>
+    <icon>icon-v28.png</icon>
     <fanart>fanart.jpg</fanart>
     <clearlogo>clearlogo.png</clearlogo>
     <screenshot>resources/screenshot-01.jpg</screenshot>

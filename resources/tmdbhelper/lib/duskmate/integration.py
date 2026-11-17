@@ -384,6 +384,7 @@ def get_status():
             'ok': getLocalizedString(186),
         },
         'last_add': state.get('last_add'),
+        'last_curated_operation': state.get('last_curated_operation'),
         'curated': {
             'generation': curated.get('generation', ''),
             # A pending generation is live only while it belongs to this Kodi process. If Kodi
@@ -675,6 +676,7 @@ def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
                 },
                 'item_count': len(owned_files),
                 'failures': [],
+                'request_id': str(kwargs.get('request_id') or ''),
             }
             state['last_add'] = result
             _write_state(state)
@@ -690,6 +692,7 @@ def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
             priority_episode=priority_episode,
         )
         result = _summary(tmdb_type, tmdb_id, items)
+        result['request_id'] = str(kwargs.get('request_id') or '')
         result['scan_managed'] = bool(
             tmdb_type == 'tv' and priority_season > 0 and priority_episode > 0 and not curated
         )
@@ -702,6 +705,7 @@ def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
             'item_count': 0,
             'failures': [],
             'error': str(error),
+            'request_id': str(kwargs.get('request_id') or ''),
         }
         state['last_add'] = result
         _write_state(state)
@@ -747,6 +751,11 @@ def curated_begin(generation=None, **kwargs):
     curated['pending_keys'] = []
     curated['pending_owner_pid'] = os.getpid()
     curated['pending_started_at'] = now
+    state['last_curated_operation'] = {
+        'action': 'begin',
+        'request_id': str(kwargs.get('request_id') or ''),
+        'outcome': 'success',
+    }
     _write_state(state)
     return True
 
@@ -765,6 +774,11 @@ def curated_touch(tmdb_type=None, tmdb_id=None, generation=None, retain=False, *
         entry['generation'] = str(generation or curated.get('pending_generation') or '')
         if str(retain).lower() in ('1', 'true', 'yes'):
             entry['retained'] = True
+    state['last_curated_operation'] = {
+        'action': 'touch',
+        'request_id': str(kwargs.get('request_id') or ''),
+        'outcome': 'success',
+    }
     _write_state(state)
     return True
 
@@ -802,5 +816,31 @@ def curated_commit(generation=None, **kwargs):
     curated.pop('pending_started_at', None)
     curated['active_count'] = len(active)
     curated['removed_files'] = removed
+    state['last_curated_operation'] = {
+        'action': 'commit',
+        'request_id': str(kwargs.get('request_id') or ''),
+        'outcome': 'success',
+    }
+    _write_state(state)
+    return True
+
+
+def curated_abort(generation=None, **kwargs):
+    """Release only an unfinished transaction; completed entries and files stay untouched."""
+    state = _read_state()
+    curated = state.setdefault('curated', {'entries': {}})
+    expected = str(generation or '')
+    pending = str(curated.get('pending_generation') or '')
+    if expected and pending and expected != pending:
+        raise ValueError('The curated generation does not match the pending update')
+    curated.pop('pending_generation', None)
+    curated.pop('pending_keys', None)
+    curated.pop('pending_owner_pid', None)
+    curated.pop('pending_started_at', None)
+    state['last_curated_operation'] = {
+        'action': 'abort',
+        'request_id': str(kwargs.get('request_id') or ''),
+        'outcome': 'success',
+    }
     _write_state(state)
     return True
