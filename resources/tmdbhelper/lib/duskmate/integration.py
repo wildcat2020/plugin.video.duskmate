@@ -16,7 +16,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '18'
+DUSKMATE_BUILD = '29'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
@@ -558,6 +558,157 @@ def _scan_library_when_idle(path, timeout=600):
         'params': {'directory': path, 'showdialogs': False},
     }))
     return True
+
+
+def _kodi_episode_id(tmdb_id, season, episode):
+    """Return Kodi's episode id when this TMDB episode is already indexed."""
+    from xbmc import executeJSONRPC
+
+    shows = json.loads(executeJSONRPC(json.dumps({
+        'jsonrpc': '2.0',
+        'id': 'duskmate-upnext-shows',
+        'method': 'VideoLibrary.GetTVShows',
+        'params': {'properties': ['uniqueid']},
+    }))).get('result', {}).get('tvshows', [])
+    tvshowid = next((
+        item.get('tvshowid')
+        for item in shows
+        if str((item.get('uniqueid') or {}).get('tmdb') or '') == str(tmdb_id)
+    ), None)
+    if tvshowid is None:
+        return None
+    episodes = json.loads(executeJSONRPC(json.dumps({
+        'jsonrpc': '2.0',
+        'id': 'duskmate-upnext-episodes',
+        'method': 'VideoLibrary.GetEpisodes',
+        'params': {
+            'tvshowid': tvshowid,
+            'season': int(season),
+            'properties': ['episode'],
+        },
+    }))).get('result', {}).get('episodes', [])
+    return next((
+        item.get('episodeid')
+        for item in episodes
+        if int(item.get('episode', -1)) == int(episode)
+    ), None)
+
+
+def _upnext_candidates(tmdb_id, season, episode):
+    """Return aired, non-special episodes after the current episode in broadcast order."""
+    from datetime import date
+    from tmdbhelper.lib.items.database.baseview_factories.factory import BaseViewFactory
+
+    current = (int(season), int(episode))
+    today = date.today().isoformat()
+    items = BaseViewFactory('flatseasons', 'tv', int(tmdb_id)).data or []
+    return [
+        item for item in items
+        if int(item.get('infolabels', {}).get('season') or 0) > 0
+        and (
+            int(item.get('infolabels', {}).get('season') or 0),
+            int(item.get('infolabels', {}).get('episode') or 0),
+        ) > current
+        and item.get('infolabels', {}).get('premiered')
+        and str(item['infolabels']['premiered']) <= today
+    ]
+
+
+def _upnext_item(tmdb_id, season, episode):
+    """Resolve the first aired episode after the current one that is not already watched.
+
+    ListItemDetails merges the enabled Kodi/Trakt sync providers, so playcount reflects the
+    viewer's combined watched state rather than TMDB metadata alone.
+    """
+    from tmdbhelper.lib.items.database.listitem import ListItemDetails
+
+    candidates = _upnext_candidates(tmdb_id, season, episode)
+    if not candidates:
+        return None
+    lidc = ListItemDetails()
+    lidc.cache_refresh = 'basic'
+    lidc.cache_translations = False
+    lidc.extendedinfo = False
+    # Resolve in bounded batches so a long show does not turn one popup into one huge request,
+    # while still finding the true next unwatched episode after a long watched run.
+    for start in range(0, len(candidates), 40):
+        configured = lidc.configure_listitems_threaded(candidates[start:start + 40])
+        selected = next((
+            item for item in configured
+            if item and int(item.infolabels.get('playcount') or 0) == 0
+        ), None)
+        if selected:
+            return selected
+    return None
+
+
+def _serialise_upnext(item, tmdb_id):
+    item.finalise()
+    labels = item.infolabels
+    season = int(labels.get('season') or 0)
+    episode = int(labels.get('episode') or 0)
+    kodi_id = _kodi_episode_id(tmdb_id, season, episode)
+    play_url = (
+        'plugin://plugin.video.duskmate/?info=play&tmdb_type=tv'
+        f'&tmdb_id={int(tmdb_id)}&season={season}&episode={episode}'
+        '&allow_playlist=false'
+    )
+    return {
+        'next_episode': {
+            'episodeid': kodi_id,
+            'tvshowid': -1,
+            'season': season,
+            'episode': episode,
+            'title': labels.get('title') or labels.get('label') or '',
+            'showtitle': labels.get('tvshowtitle') or labels.get('showtitle') or '',
+            'plot': labels.get('plot') or '',
+            'firstaired': labels.get('premiered') or '',
+            'runtime': labels.get('duration') or labels.get('runtime') or 0,
+            'rating': labels.get('rating') or 0,
+            'playcount': int(labels.get('playcount') or 0),
+            'art': dict(item.art or {}),
+            'file': play_url,
+        },
+        'play_url': play_url,
+        'tmdb_id': int(tmdb_id),
+        'library_episodeid': kodi_id,
+    }
+
+
+def resolve_upnext(request_id=None, tmdb_id=None, season=None, episode=None, **kwargs):
+    """Resolve Up Next through Duskmate and return it through a request-scoped window property.
+
+    The response is published before any missing library item is imported, so playback UI never
+    waits for a full-series write/scan. The normal Duskmate priority import then writes and scans
+    the selected episode first and continues the complete series in its established queue.
+    """
+    from xbmc import executebuiltin
+    from xbmcgui import Window
+
+    property_name = f'Duskmate.UpNext.Response.{request_id or "default"}'
+    response = {'ok': False}
+    try:
+        if tmdb_id is None or season is None or episode is None:
+            raise ValueError('TMDB show id, season and episode are required')
+        item = _upnext_item(int(tmdb_id), int(season), int(episode))
+        if item is None:
+            response['reason'] = 'no_aired_unwatched_episode'
+        else:
+            response.update(_serialise_upnext(item, int(tmdb_id)))
+            response['ok'] = True
+    except Exception as error:
+        response['reason'] = 'resolver_failed'
+        response['error'] = str(error)
+    Window(10000).setProperty(property_name, json.dumps(response, separators=(',', ':')))
+
+    if response.get('ok') and response.get('library_episodeid') is None:
+        next_item = response['next_episode']
+        executebuiltin(
+            'RunScript(plugin.video.duskmate,duskmate_add_to_library,'
+            f'tmdb_type=tv,tmdb_id={int(tmdb_id)},season={next_item["season"]},'
+            f'episode={next_item["episode"]},request_id=upnext-{request_id or "default"})'
+        )
+    return response
 
 
 def _add_tvshow(tmdb_id, force, curated=False, priority_season=0, priority_episode=0):

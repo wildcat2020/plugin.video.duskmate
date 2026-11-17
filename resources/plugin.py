@@ -15,6 +15,7 @@ if __name__ == '__main__':
         'duskmate_setup',
         'duskmate_provision_trakt',
         'duskmate_add_to_library',
+        'duskmate_resolve_upnext',
         'duskmate_curated_begin',
         'duskmate_curated_touch',
         'duskmate_curated_commit',

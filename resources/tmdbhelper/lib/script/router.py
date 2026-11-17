@@ -140,6 +140,8 @@ class Script(object):
             lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'provision_trakt')(**kwargs),
         'duskmate_add_to_library':
             lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'add_to_library')(**kwargs),
+        'duskmate_resolve_upnext':
+            lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'resolve_upnext')(**kwargs),
         'duskmate_curated_begin':
             lambda **kwargs: importmodule('tmdbhelper.lib.duskmate.integration', 'curated_begin')(**kwargs),
         'duskmate_curated_touch':
