@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <addon id="plugin.video.duskmate"
-        version="6.21.5.29"
+        version="6.21.5.30"
 name="Duskmate"
 provider-name="jurialmunkey / Duskmate">
 <requires>
@@ -8,8 +8,8 @@ provider-name="jurialmunkey / Duskmate">
   <import addon="script.module.requests" version="2.9.1"/>
   <import addon="script.module.pil" version="1.1.7"/>
   <import addon="script.module.addon.signals" version="0.0.6" />
-  <import addon="script.module.jurialmunkey" version="0.2.37" />
-  <import addon="script.module.infotagger" version="0.1.0" />
+  <import addon="script.module.duskmate.common" version="0.2.39.1" />
+  <import addon="script.module.duskmate.infotagger" version="0.1.0.1" />
   <import addon="script.module.qrcode" version="6.1.0" />
 </requires>
 <extension point="xbmc.python.script" library="resources/script.py" />
