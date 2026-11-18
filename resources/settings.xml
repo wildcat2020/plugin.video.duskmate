@@ -768,13 +768,6 @@
                         <heading>32127</heading>
                     </control>
                 </setting>
-                <setting id="gemini_settings" type="action" label="32736" help="32737">
-                    <level>0</level>
-                    <control type="button" format="action">
-                        <close>true</close>
-                        <data>RunScript(plugin.video.duskmate,open_sync_provider_settings,addon_id=script.module.duskmate.sync.gemini)</data>
-                    </control>
-                </setting>
                 <setting id="tvdb_settings" type="action" label="32738" help="32739">
                     <level>0</level>
                     <control type="button" format="action">

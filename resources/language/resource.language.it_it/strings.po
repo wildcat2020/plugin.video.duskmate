@@ -3426,16 +3426,6 @@ msgid "Logging"
 msgstr "Registrazione log"
 
 #: /resources/settings.xml
-msgctxt "#32736"
-msgid "Gemini settings"
-msgstr "Impostazioni Gemini"
-
-#: /resources/settings.xml
-msgctxt "#32737"
-msgid "Install or enable the Gemini module and open its API settings."
-msgstr "Installa o attiva il modulo Gemini e apri le relative impostazioni API."
-
-#: /resources/settings.xml
 msgctxt "#32738"
 msgid "TVDb settings"
 msgstr "Impostazioni TVDb"

@@ -2772,14 +2772,6 @@ msgctxt "#32735"
 msgid "Logging"
 msgstr "Journalisation"
 
-msgctxt "#32736"
-msgid "Gemini settings"
-msgstr "Paramètres Gemini"
-
-msgctxt "#32737"
-msgid "Install or enable the Gemini module and open its API settings."
-msgstr "Installe ou active le module Gemini et ouvre ses paramètres API."
-
 msgctxt "#32738"
 msgid "TVDb settings"
 msgstr "Paramètres TVDb"

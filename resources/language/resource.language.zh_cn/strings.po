@@ -3434,16 +3434,6 @@ msgid "Logging"
 msgstr "日志"
 
 #: /resources/settings.xml
-msgctxt "#32736"
-msgid "Gemini settings"
-msgstr "Gemini 设置"
-
-#: /resources/settings.xml
-msgctxt "#32737"
-msgid "Install or enable the Gemini module and open its API settings."
-msgstr "安装或启用 Gemini 模块并打开其 API 设置。"
-
-#: /resources/settings.xml
 msgctxt "#32738"
 msgid "TVDb settings"
 msgstr "TVDb 设置"

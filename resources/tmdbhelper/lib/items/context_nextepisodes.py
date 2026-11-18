@@ -23,7 +23,6 @@ class BrowseNextEpisodesContextMenu:
         'mdblist_locallist',
         'mdblist_userlist',
         'tvdb_award_category',
-        'gemini_recommendations',
     )
     typed_routes = (
         'popular',

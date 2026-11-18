@@ -3422,16 +3422,6 @@ msgid "Logging"
 msgstr "Registro de logs"
 
 #: /resources/settings.xml
-msgctxt "#32736"
-msgid "Gemini settings"
-msgstr "Configurações do Gemini"
-
-#: /resources/settings.xml
-msgctxt "#32737"
-msgid "Install or enable the Gemini module and open its API settings."
-msgstr "Instale ou ative o módulo do Gemini e abra suas configurações de API."
-
-#: /resources/settings.xml
 msgctxt "#32738"
 msgid "TVDb settings"
 msgstr "Configurações do TVDb"

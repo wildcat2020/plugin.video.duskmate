@@ -24,11 +24,6 @@ PROVIDERS = {
         'display_name': 'TVDb',
         'capabilities': ('lists',),
     },
-    'script.module.duskmate.sync.gemini': {
-        'provider_id': 'gemini',
-        'display_name': 'Gemini',
-        'capabilities': ('lists',),
-    },
     'script.module.duskmate.sync.kodi': {
         'provider_id': 'kodi',
         'display_name': 'Kodi',

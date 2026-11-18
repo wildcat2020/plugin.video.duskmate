@@ -1,28 +1,26 @@
-# Duskmate media helper [![License](https://img.shields.io/badge/License-GPLv3-blue)](https://github.com/jurialmunkey/plugin.video.themoviedb.helper/blob/master/LICENSE.txt)
+# Duskmate media helper
 
-<table><tr><td><img src="https://github.githubassets.com/images/modules/site/icons/funding_platforms/ko_fi.svg" width="48" height="48" /></td><td><b>Buy me a Coffee</b><br>https://ko-fi.com/jurialmunkey</td></tr></table>
-
-<img src="https://github.com/jurialmunkey/plugin.video.themoviedb.helper/blob/matrix/icon.png" width="256" height="256" />
-
-See the upstream [TMDbHelper Wiki](https://github.com/jurialmunkey/plugin.video.themoviedb.helper/wiki) for usage.
-
-
+Duskmate's Kodi media helper provides TMDB metadata, library integration and
+the integration routes used by Duskmate. It uses the unique
+`plugin.video.duskmate` add-on ID.
 
 ## Installation
 
-Install this build from the Duskmate Add-on Repository. It uses the unique
-`plugin.video.duskmate` ID, so Kodi's global repository-origin policy does not need to change.
+Install this build only from the Duskmate Add-on Repository:
 
+`https://wildcat2020.github.io/repository.duskmate/`
 
-Kodi File Manager Source:
-https://jurialmunkey.github.io/repository.jurialmunkey/
+The Duskmate installer can perform the guided installation. For a manual Kodi
+installation, enable Unknown sources, add the URL above in File Manager, install
+`repository.duskmate-1.0.57.zip`, and then install **Duskmate media helper**
+from the Duskmate Add-on Repository.
 
-Direct ZIP Install:
-https://jurialmunkey.github.io/repository.jurialmunkey/repository.jurialmunkey-3.4.zip 
+The repository distributes only Duskmate package IDs. It does not bundle or
+install upstream repositories, player packs, player definitions or provider
+add-ons.
 
-Instructions:
+## Source and attribution
 
-1. Enable "Unknown Sources" in Kodi Settings > System > Add-ons
-2. Install the Duskmate repository; no global repository-origin setting change is required
-3. Install my repository using either the zip or file manager source linked above
-4. Install latest version of tmdbhelper from my repo
+This GPL-3.0 project is maintained as a Duskmate fork of
+[TMDb Helper](https://github.com/jurialmunkey/plugin.video.themoviedb.helper).
+Upstream copyright notices and licence materials are retained in the source.

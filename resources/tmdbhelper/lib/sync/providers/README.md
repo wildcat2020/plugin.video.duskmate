@@ -374,8 +374,8 @@ already-queued widget requests from repeating the same setup attempt.
 
 `SyncProviderOnboarding(addon_id).configure()` installs or enables a catalogue
 provider and offers `SyncProviderDefaultSelection(provider)` when it supports
-selectable sync features. Providers without these features, such as TVDb and
-Gemini, skip configuration and leave existing sync selections unchanged.
+selectable sync features. Providers without these features, such as TVDb, skip
+configuration and leave existing sync selections unchanged.
 The dialog offers
 Default, Cancel, and Custom, with Default focused. Default replaces every feature's
 provider selection, including `never`, with the selected provider for supported
@@ -791,21 +791,19 @@ in the module's documentation.
 
 ## Browsing-only providers
 
-`script.module.duskmate.sync.tvdb` and
-`script.module.duskmate.sync.gemini` use interface version 4 with only the
-`lists` capability. They own their API clients, settings, artwork, root entries,
-directory properties and output mappers. Their script entry points use
+`script.module.duskmate.sync.tvdb` uses interface version 4 with only the
+`lists` capability. It owns its API client, settings, artwork, root entries,
+directory properties and output mappers. Its script entry point uses
 `open_sync_provider_settings` to open API settings without assigning sync
 features. Core has no reverse dependencies on these optional modules.
 
 TVDb supplies awards and genres through `tvdb_directory`, `tvdb_awards`,
 `tvdb_award_categories`, `tvdb_award_category`, `tvdb_genres` and `tvdb_genre`.
-Gemini supplies `gemini_recommendations`. Core redirects legacy `dir_tvdb*`
-and `gemini` routes to those names, preserving existing widget parameters and
-the normal missing-provider install/enable flow.
+Core redirects legacy `dir_tvdb*` routes to those names, preserving existing
+widget parameters and the normal missing-provider install/enable flow.
 
-Before creating API clients, Gemini migrates the legacy core API key and TVDb
-migrates the legacy bearer token into module-owned storage. Migration verifies
+Before creating API clients, TVDb migrates the legacy bearer token into
+module-owned storage. Migration verifies
 the destination before clearing the legacy value and preserves existing module
 credentials. TVDb retains its bundled key and supports an optional personal key.
 Legacy credential values remain available to these migrations in Kodi's saved
