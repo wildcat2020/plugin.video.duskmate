@@ -110,15 +110,26 @@ def del_old_files(folder, limit=1):
 
 
 def make_path(path, warn_dialog=False):
-    if xbmcvfs.exists(path):
+    translated = xbmcvfs.translatePath(path)
+    if xbmcvfs.exists(path) or xbmcvfs.exists(translated):
         return xbmcvfs.translatePath(path)
-    if xbmcvfs.mkdirs(path):
-        return xbmcvfs.translatePath(path)
-    if xbmcvfs.exists(path):  # mkdirs doesn't return true on success on some systems so double check
-        return xbmcvfs.translatePath(path)
+    created = xbmcvfs.mkdirs(path)
+    if created:
+        return translated
+    # Android's VFS can create an app-private directory successfully but expose it through
+    # exists()/GetDirectory only after the filesystem provider has caught up.  A single
+    # immediate check therefore reports a false failure, even though the folder appears a few
+    # moments later.  Poll both the special:// path and its translated path for a short,
+    # bounded interval before aborting the library write.  This preserves the safety check and
+    # avoids requiring the global "ignore folder checking" workaround.
+    from xbmc import sleep
+    for _ in range(40):
+        sleep(50)
+        if xbmcvfs.exists(path) or xbmcvfs.exists(translated):
+            return translated
     if get_setting('ignore_folderchecking'):  # some systems lag in reporting folder exists after creation so allow overriding check
         kodi_log(f'Ignored xbmcvfs folder check error\n{path}', 2)
-        return xbmcvfs.translatePath(path)
+        return translated
     kodi_log(f'XBMCVFS unable to create path:\n{path}', 2)
     if not warn_dialog:
         return
