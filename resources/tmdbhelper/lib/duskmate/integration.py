@@ -16,7 +16,7 @@ from tmdbhelper.lib.update.common import LibraryCommon
 
 
 UPSTREAM_VERSION = '6.21.5'
-DUSKMATE_BUILD = '30'
+DUSKMATE_BUILD = '44'
 STATUS_FILE = f'{ADDONDATA}duskmate-status.json'
 SOURCES_FILE = 'special://profile/sources.xml'
 TRAKT_SYNC_ADDON = 'script.module.duskmate.sync.trakt'
@@ -24,6 +24,10 @@ CURATED_FOLDER = 'Duskmate Curated'
 LIBRARY_SOURCES = {
     'movies': 'Duskmate Movies',
     'tvshows': 'Duskmate TV Shows',
+}
+SAFE_LIBRARY_PATHS = {
+    'movies': 'special://profile/addon_data/plugin.video.duskmate/movies/',
+    'tvshows': 'special://profile/addon_data/plugin.video.duskmate/tvshows/',
 }
 
 
@@ -58,6 +62,117 @@ def _paths_ready(paths, create=False):
             path_exists = exists(path) or exists(translated)
         ready = path_exists and ready
     return ready
+
+
+def _path_is_writable(path, attempts=1):
+    """Verify a library root with a real VFS write, not merely exists().
+
+    Network sources can remain readable after their credentials or share permissions stop allowing
+    writes.  Treating ``exists()`` as readiness leaves the UI waiting for a STRM that can never be
+    created.  A tiny probe catches that condition before a library builder starts.
+    """
+    from xbmc import sleep
+    from xbmcvfs import File, delete, exists, mkdirs
+
+    root = (path or '').replace(chr(92), '/').rstrip('/') + '/'
+    if not root.strip('/'):
+        return False
+    probe = f'{root}.duskmate-write-probe-{os.getpid()}.tmp'
+    for attempt in range(max(1, attempts)):
+        try:
+            if not exists(root):
+                mkdirs(root)
+            handle = File(probe, 'w')
+            try:
+                handle.write('duskmate')
+            finally:
+                handle.close()
+            if exists(probe):
+                delete(probe)
+                return True
+        except Exception:
+            pass
+        try:
+            delete(probe)
+        except Exception:
+            pass
+        if attempt + 1 < attempts:
+            sleep(250 * (attempt + 1))
+    return False
+
+
+def _effective_library_paths(required_type):
+    """Return writable paths while preserving the viewer's configured helper paths.
+
+    The configured root is always preferred and retried on every independent operation.  If it is
+    temporarily read-only or offline, Duskmate falls back to its app-private Kodi library instead
+    of failing playback.  The setting itself is never overwritten, so a recovered NAS is used
+    automatically next time.
+    """
+    configured = _library_paths()
+    effective = dict(configured)
+    preferred = configured[required_type]
+
+    # Never put an interactive title click behind a network filesystem write. Kodi's VFS can
+    # block inside SMB/NFS before Python regains control, so no retry or timeout around File.write
+    # can guarantee responsiveness. Network-configured helper roots remain untouched for the
+    # user's own workflows; Duskmate additions use its local managed source deterministically.
+    network_preferred = preferred.lower().startswith(('smb://', 'nfs://', 'ftp://', 'sftp://'))
+
+    # A disconnected/read-only network share can take seconds to reject every write. Once a real
+    # probe has failed, keep using the verified local fallback for a short cooldown rather than
+    # blocking every title click on the same doomed network operation. The user's configured path
+    # remains untouched and is probed again after the cooldown, so recovery is automatic.
+    state = _read_state()
+    remembered = state.get('library_fallbacks', {}).get(required_type, {})
+    remembered_at = int(remembered.get('at') or 0)
+    remembered_preferred = remembered.get('preferred')
+    remembered_active = remembered.get('active')
+    if remembered_active and remembered_active.lower().startswith('special://'):
+        # Kodi's Python VFS can write a special:// path, but the video scanner on Android does not
+        # reliably enumerate it when used as a library source. Persist and scan the translated
+        # filesystem path instead; it is still Kodi-private and requires no storage permission.
+        from xbmcvfs import translatePath
+        remembered_active = translatePath(remembered_active).replace(chr(92), '/').rstrip('/') + '/'
+    if (remembered_preferred == preferred and remembered_active and
+            int(time.time()) - remembered_at < 15 * 60 and
+            _path_is_writable(remembered_active)):
+        effective[required_type] = remembered_active
+        # A fallback remembered by an older build may predate registration of the local source.
+        # Reconcile its source and scraper binding before submitting a scan: successfully writing
+        # STRM/NFO files alone does not make those files visible in Kodi's library.
+        if not _ensure_video_sources(effective):
+            raise RuntimeError('Kodi could not register the remembered safe library source')
+        bindings = _ensure_content_bindings(effective)
+        if not bindings.get(required_type):
+            raise RuntimeError('Kodi could not assign metadata.local to the remembered safe library source')
+        return effective
+
+    if not network_preferred and _path_is_writable(preferred):
+        return effective
+
+    from xbmcvfs import translatePath
+    fallback = translatePath(SAFE_LIBRARY_PATHS[required_type]).replace(chr(92), '/').rstrip('/') + '/'
+    if not _path_is_writable(fallback):
+        raise RuntimeError('Kodi cannot write to either the configured library or its local fallback')
+    effective[required_type] = fallback
+
+    # Kodi must know how to scrape the fallback before its targeted scan starts.  Keep every
+    # unrelated source untouched; only Duskmate's managed source is moved when necessary.
+    if not _ensure_video_sources(effective):
+        raise RuntimeError('Kodi could not register the safe local library source')
+    bindings = _ensure_content_bindings(effective)
+    if not bindings.get(required_type):
+        raise RuntimeError('Kodi could not assign metadata.local to the safe local library source')
+
+    fallbacks = state.setdefault('library_fallbacks', {})
+    fallbacks[required_type] = {
+        'preferred': preferred,
+        'active': fallback,
+        'at': int(time.time()),
+    }
+    _write_state(state)
+    return effective
 
 
 def _normalise_path(path):
@@ -128,11 +243,18 @@ def _ensure_video_sources(paths):
             if node.text
         ):
             continue
-        source = ElementTree.SubElement(video, 'source')
-        ElementTree.SubElement(source, 'name').text = managed_name
-        path_node = ElementTree.SubElement(source, 'path', {'pathversion': '1'})
+        managed = next((
+            source for source in sources
+            if (source.findtext('name') or '') == managed_name
+        ), None)
+        if managed is None:
+            managed = ElementTree.SubElement(video, 'source')
+            ElementTree.SubElement(managed, 'name').text = managed_name
+            ElementTree.SubElement(managed, 'allowsharing').text = 'true'
+        for node in list(managed.findall('./path')):
+            managed.remove(node)
+        path_node = ElementTree.SubElement(managed, 'path', {'pathversion': '1'})
         path_node.text = path
-        ElementTree.SubElement(source, 'allowsharing').text = 'true'
         changed = True
 
     if changed or not exists(SOURCES_FILE):
@@ -208,6 +330,14 @@ def _content_bindings(paths):
     return bindings
 
 
+def _is_managed_fallback(key, path):
+    """Return whether *path* is Duskmate's safe local root, in either Kodi path form."""
+    from xbmcvfs import translatePath
+    safe_path = SAFE_LIBRARY_PATHS[key]
+    candidates = (safe_path, translatePath(safe_path))
+    return any(_normalise_path(path) == _normalise_path(candidate) for candidate in candidates)
+
+
 def _ensure_content_bindings(paths):
     """Bind the helper's *effective* roots as Kodi movie/TV sources.
 
@@ -216,12 +346,20 @@ def _ensure_content_bindings(paths):
     paths currently selected in the helper settings are touched. Existing parent bindings are
     reused, and no unrelated source, scraper setting, or library row is changed.
 
-    ``metadata.local`` ships with Kodi and is the correct scraper here because TMDB Helper writes
-    the NFO files consumed by the library scan. Schema checks keep this fail-closed on an unknown
+    TMDB Helper writes URL-NFO files, so these managed roots must use Kodi's official TMDB
+    scrapers. ``metadata.local`` cannot resolve a URL-only NFO and leaves the scanner running
+    without ever indexing the selected episode. Schema checks keep this fail-closed on an unknown
     Kodi database instead of making a speculative write.
     """
     bindings = _content_bindings(paths)
-    if all(bindings.values()):
+    managed_fallbacks = {
+        key: _is_managed_fallback(key, path)
+        for key, path in paths.items()
+    }
+    # Existing user-owned content roots are never rewritten. Duskmate's own safe roots are
+    # deliberately reconciled on every setup/preparation so an older incorrect scan mode is
+    # migrated in place instead of remaining permanently "ready" but unscannable.
+    if all(bindings.values()) and not any(managed_fallbacks.values()):
         return bindings
 
     try:
@@ -248,35 +386,49 @@ def _ensure_content_bindings(paths):
             rows = connection.execute('SELECT idPath, strPath, strContent FROM path').fetchall()
             connection.execute('BEGIN IMMEDIATE')
             for key, configured_path in paths.items():
-                if bindings[key]:
+                if bindings[key] and not managed_fallbacks[key]:
                     continue
                 configured_path = configured_path.replace(chr(92), '/').rstrip('/') + '/'
                 translated_path = translatePath(configured_path).replace(chr(92), '/').rstrip('/') + '/'
-                candidates = (configured_path, translated_path)
+                candidates = [configured_path, translated_path]
+                if managed_fallbacks[key]:
+                    safe_path = SAFE_LIBRARY_PATHS[key]
+                    candidates.extend((safe_path, translatePath(safe_path)))
 
                 # Prefer an existing exact row in either Kodi or translated form. Only create a
                 # row when Kodi has never seen this precise helper root.
-                exact = next((row for row in rows if any(
+                exact_rows = [row for row in rows if any(
                     _normalise_path(row[1]) == _normalise_path(candidate)
                     for candidate in candidates
-                )), None)
+                )]
+                # Kodi's TV content dialog stores ``useFolderNames=0`` when the selected
+                # directory contains multiple show folders.  A value of 1 means "this
+                # directory contains a single TV show", which makes Kodi look for
+                # tvshow.nfo at the managed root and skip every show below it.  Movies
+                # retain folder-name matching because each managed movie has its own
+                # directory.
                 values = {
                     'strContent': key,
-                    'strScraper': 'metadata.local',
+                    'strScraper': (
+                        'metadata.tvshows.themoviedb.org.python'
+                        if key == 'tvshows'
+                        else 'metadata.themoviedb.org.python'
+                    ),
                     'scanRecursive': 0,
-                    'useFolderNames': 1,
+                    'useFolderNames': 0 if key == 'tvshows' else 1,
                     'strSettings': '',
                     'noUpdate': 0,
                     'exclude': 0,
                     'allAudio': 0,
                 }
                 values = {name: value for name, value in values.items() if name in columns}
-                if exact:
+                if exact_rows:
                     assignments = ', '.join(f'{name}=?' for name in values)
-                    connection.execute(
-                        f'UPDATE path SET {assignments} WHERE idPath=?',
-                        (*values.values(), exact[0]),
-                    )
+                    for exact in exact_rows:
+                        connection.execute(
+                            f'UPDATE path SET {assignments} WHERE idPath=?',
+                            (*values.values(), exact[0]),
+                        )
                 else:
                     insert_values = {'strPath': configured_path, **values}
                     names = ', '.join(insert_values)
@@ -521,26 +673,28 @@ def _summary(tmdb_type, tmdb_id, items):
 
 def _add_movie(tmdb_id, force, curated=False):
     from tmdbhelper.lib.update.builder.movies import LibraryBuilderMovies
+    from jurialmunkey.ftools import cached_property
+    from tmdbhelper.lib.update.items.movie import LibraryMovie
 
+    effective_paths = _effective_library_paths('movies')
+    target_root = effective_paths['movies']
     if curated:
-        from jurialmunkey.ftools import cached_property
-        from tmdbhelper.lib.update.items.movie import LibraryMovie
+        target_root = f'{target_root.replace(chr(92), "/").rstrip("/")}/{CURATED_FOLDER}/'
 
-        class DuskmateCuratedMovie(LibraryMovie):
-            @cached_property
-            def basedir(self):
-                return _curated_paths()['movies']
+    class DuskmateMovie(LibraryMovie):
+        @cached_property
+        def basedir(self):
+            return target_root
 
     class DuskmateMovieBuilder(_ResultCollector, LibraryBuilderMovies):
-        if curated:
-            @cached_property
-            def library_item_class(self):
-                return DuskmateCuratedMovie
+        @cached_property
+        def library_item_class(self):
+            return DuskmateMovie
 
     with DuskmateMovieBuilder() as library:
         library.forced = force
         library.create(tmdb_id=tmdb_id)
-        return library.duskmate_items
+        return library.duskmate_items, target_root
 
 
 def _scan_library_when_idle(path, timeout=600):
@@ -711,47 +865,54 @@ def resolve_upnext(request_id=None, tmdb_id=None, season=None, episode=None, **k
     return response
 
 
-def _add_tvshow(tmdb_id, force, curated=False, priority_season=0, priority_episode=0):
+def _add_tvshow(tmdb_id, force, curated=False, priority_season=0, priority_episode=0,
+                priority_only=False):
     from tmdbhelper.lib.update.builder.tvshows import LibraryBuilderTvshows
+    from jurialmunkey.ftools import cached_property
+    from tmdbhelper.lib.update.items.episode import LibraryEpisode
+    from tmdbhelper.lib.update.items.season import LibrarySeason
+    from tmdbhelper.lib.update.items.tvshow import LibraryTvshow
 
+    effective_paths = _effective_library_paths('tvshows')
+    target_root = effective_paths['tvshows']
     if curated:
-        from jurialmunkey.ftools import cached_property
-        from tmdbhelper.lib.update.items.episode import LibraryEpisode
-        from tmdbhelper.lib.update.items.season import LibrarySeason
-        from tmdbhelper.lib.update.items.tvshow import LibraryTvshow
+        target_root = f'{target_root.replace(chr(92), "/").rstrip("/")}/{CURATED_FOLDER}/'
 
-        class DuskmateCuratedEpisode(LibraryEpisode):
-            @cached_property
-            def basedir(self):
-                return _curated_paths()['tvshows']
+    class DuskmateEpisode(LibraryEpisode):
+        @cached_property
+        def basedir(self):
+            return target_root
 
-        class DuskmateCuratedSeason(LibrarySeason):
-            def get_episode(self, sync_data):
-                episode = DuskmateCuratedEpisode(self.tmdb_id)
-                episode.sync_data = self.key_getter(sync_data)
-                episode.cache = self.cache
-                episode.tvshow_id = self.tvshow_id
-                episode.folders = self.folders + episode.folders
-                return episode
+    class DuskmateSeason(LibrarySeason):
+        @cached_property
+        def basedir(self):
+            return target_root
 
-        class DuskmateCuratedTvshow(LibraryTvshow):
-            @cached_property
-            def basedir(self):
-                return _curated_paths()['tvshows']
+        def get_episode(self, sync_data):
+            episode = DuskmateEpisode(self.tmdb_id)
+            episode.sync_data = self.key_getter(sync_data)
+            episode.cache = self.cache
+            episode.tvshow_id = self.tvshow_id
+            episode.folders = self.folders + episode.folders
+            return episode
 
-            def get_season(self, sync_data):
-                season = DuskmateCuratedSeason(self.tmdb_id)
-                season.sync_data = self.key_getter(sync_data)
-                season.cache = self.cache
-                season.tvshow_id = self.tvshow_id
-                season.folders = self.folders + season.folders
-                return season
+    class DuskmateTvshow(LibraryTvshow):
+        @cached_property
+        def basedir(self):
+            return target_root
+
+        def get_season(self, sync_data):
+            season = DuskmateSeason(self.tmdb_id)
+            season.sync_data = self.key_getter(sync_data)
+            season.cache = self.cache
+            season.tvshow_id = self.tvshow_id
+            season.folders = self.folders + season.folders
+            return season
 
     class DuskmateTvshowBuilder(_ResultCollector, LibraryBuilderTvshows):
-        if curated:
-            @cached_property
-            def library_item_class(self):
-                return DuskmateCuratedTvshow
+        @cached_property
+        def library_item_class(self):
+            return DuskmateTvshow
 
         def add_library_item_seasons(self, tvshow):
             # For an episode explicitly selected in Duskmate, write that STRM first and start a
@@ -770,7 +931,28 @@ def _add_tvshow(tmdb_id, force, curated=False, priority_season=0, priority_episo
                     break
             if priority is not None:
                 self.set_library_item(priority)
-                _scan_library_when_idle(_library_paths()['tvshows'])
+                _scan_library_when_idle(target_root)
+                # The explicitly selected episode is the interactive operation. Return as soon as
+                # its files exist and its scoped scan has started; the Android worker submits the
+                # complete-series import later, when Kodi is not playing anything. Previously this
+                # method continued through every season before publishing success, leaving both
+                # Duskmate surfaces on "Preparing Kodi" for minutes.
+                if priority_only:
+                    return
+            elif priority_only:
+                # A provider can expose a just-aired/live episode before TMDB publishes it. Never
+                # fall through to a full-series import in that case: report the precise condition
+                # immediately so the UI can keep the provider action usable and offer a later retry.
+                self.duskmate_items.append({
+                    'tmdb_id': int(tmdb_id),
+                    'season': int(priority_season),
+                    'episode': int(priority_episode),
+                    'status': 3,
+                    'message': 'episode_not_available',
+                    'file': '',
+                    'owned_files': [],
+                })
+                return
 
             from tmdbhelper.lib.addon.plugin import get_localized
             total = len(tvshow.seasons)
@@ -790,10 +972,10 @@ def _add_tvshow(tmdb_id, force, curated=False, priority_season=0, priority_episo
         library.forced = force
         library.create(tmdb_id=tmdb_id)
         items = library.duskmate_items
-    if not curated and priority_season > 0 and priority_episode > 0:
+    if not curated and priority_season > 0 and priority_episode > 0 and not priority_only:
         # Queue one final pass after the priority scan instead of overlapping scans per batch.
-        _scan_library_when_idle(_library_paths()['tvshows'])
-    return items
+        _scan_library_when_idle(target_root)
+    return items, target_root
 
 
 @is_in_kwargs({'tmdb_type': ['movie', 'tv']})
@@ -835,18 +1017,32 @@ def add_to_library(tmdb_type=None, tmdb_id=None, force=False, **kwargs):
     try:
         priority_season = int(kwargs.get('season') or 0)
         priority_episode = int(kwargs.get('episode') or 0)
-        items = _add_movie(tmdb_id, force, curated) if tmdb_type == 'movie' else _add_tvshow(
+        priority_only = str(kwargs.get('priority_only', '')).lower() in ('1', 'true', 'yes')
+        items, write_path = _add_movie(tmdb_id, force, curated) if tmdb_type == 'movie' else _add_tvshow(
             tmdb_id,
             force,
             curated,
             priority_season=priority_season,
             priority_episode=priority_episode,
+            priority_only=priority_only,
         )
         result = _summary(tmdb_type, tmdb_id, items)
+        result['library_path'] = write_path
+        if any(item.get('message') == 'episode_not_available' for item in items):
+            result['error'] = 'This episode is not available in TMDB yet. Try again after its metadata is published.'
         result['request_id'] = str(kwargs.get('request_id') or '')
-        result['scan_managed'] = bool(
-            tmdb_type == 'tv' and priority_season > 0 and priority_episode > 0 and not curated
-        )
+        result['scan_managed'] = bool(not curated and (
+            tmdb_type == 'movie'
+            or (tmdb_type == 'tv' and priority_season > 0 and priority_episode > 0)
+        ))
+        if tmdb_type == 'movie' and not curated:
+            _scan_library_when_idle(write_path)
+        # Detached full-series imports are started only by the durable Android queue after it has
+        # verified that Kodi is idle. They own their final targeted scan because no caller waits
+        # for this background result.
+        if (str(kwargs.get('background', '')).lower() in ('1', 'true', 'yes')
+                and tmdb_type == 'tv' and not curated):
+            _scan_library_when_idle(write_path)
     except Exception as error:
         result = {
             'tmdb_type': tmdb_type,
